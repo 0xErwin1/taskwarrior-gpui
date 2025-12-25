@@ -70,7 +70,15 @@ impl gpui::RenderOnce for Panel {
             .content
             .drain(..)
             .enumerate()
-            .map(|(ix, c)| gpui::div().id(ix).child(c).into_any_element())
+            .map(|(ix, c)| {
+                gpui::div()
+                    .id(ix)
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .child(c)
+                    .into_any_element()
+            })
             .collect();
 
         gpui::div()
@@ -82,6 +90,7 @@ impl gpui::RenderOnce for Panel {
             .p(gpui::px(self.padding))
             .flex()
             .flex_col()
+            .h_full()
             .children(header)
             .children(children)
     }
