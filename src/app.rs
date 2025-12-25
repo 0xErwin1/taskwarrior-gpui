@@ -1,6 +1,7 @@
 use gpui::prelude::*;
 
 use crate::models::{FilterState, ProjectTree};
+use crate::task::{TaskOverview, TaskService};
 use crate::theme::ActiveTheme;
 use crate::view::sidebar::{Sidebar, TagItem};
 use crate::view::status_bar::StatusBar;
@@ -10,6 +11,7 @@ pub(crate) struct App {
     sidebar: gpui::Entity<Sidebar>,
     filter_state: gpui::Entity<FilterState>,
     status_bar: gpui::Entity<StatusBar>,
+    task_service: TaskService,
 }
 
 impl gpui::Render for App {
@@ -60,56 +62,83 @@ impl App {
                     app.new(|cx: &mut gpui::Context<'_, App>| {
                         let filter_state = cx.new(|_cx| FilterState::new());
 
+                        log::info!("Initializing TaskService");
+                        let mut task_service = match TaskService::new() {
+                            Ok(service) => {
+                                log::info!("TaskService initialized successfully");
+                                service
+                            }
+                            Err(e) => {
+                                log::error!("Failed to initialize TaskService: {:?}", e);
+                                panic!("Cannot continue without TaskService");
+                            }
+                        };
+
+                        log::info!("Loading overview (tasks, projects, tags)");
+                        let overview = task_service.get_overview().unwrap_or_else(|e| {
+                            log::error!("Failed to get overview: {:?}", e);
+                            TaskOverview {
+                                tasks: vec![],
+                                projects: vec![],
+                                tags: vec![],
+                                total_tasks: 0,
+                                pending_tasks: 0,
+                                completed_tasks: 0,
+                            }
+                        });
+
+                        log::info!(
+                            "Loaded {} tasks, {} projects, {} tags",
+                            overview.total_tasks,
+                            overview.projects.len(),
+                            overview.tags.len()
+                        );
+
+                        for (i, task) in overview.tasks.iter().take(5).enumerate() {
+                            log::debug!(
+                                "Task {}: {} (project: {:?}, tags: {:?})",
+                                i + 1,
+                                task.description,
+                                task.project,
+                                task.tags
+                            );
+                        }
+                        if overview.tasks.len() > 5 {
+                            log::debug!("... and {} more tasks", overview.tasks.len() - 5);
+                        }
+
                         let mut project_tree = ProjectTree::new();
-                        project_tree.build_from_projects(&[
-                            ("Work.Backend.API".to_string(), 5),
-                            ("Work.Backend.DB".to_string(), 7),
-                            ("Work.Frontend.React".to_string(), 3),
-                            ("Work.Frontend.Styling".to_string(), 2),
-                            ("Home.Kitchen".to_string(), 4),
-                            ("Home.Garden".to_string(), 2),
-                            ("ignis.v0.1.phase0".to_string(), 15),
-                            ("free-ai".to_string(), 2),
-                        ]);
+                        project_tree.build_from_projects(&overview.projects);
 
-                        project_tree.expand_path("Work");
-                        project_tree.expand_path("Work.Backend");
+                        let tags: Vec<TagItem> = overview
+                            .tags
+                            .into_iter()
+                            .map(|(name, task_count)| {
+                                log::debug!("Tag: {} ({} tasks)", name, task_count);
+                                TagItem { name, task_count }
+                            })
+                            .collect();
 
-                        let tags = vec![
-                            TagItem {
-                                name: "parser".to_string(),
-                                task_count: 8,
-                            },
-                            TagItem {
-                                name: "cli".to_string(),
-                                task_count: 5,
-                            },
-                            TagItem {
-                                name: "testing".to_string(),
-                                task_count: 6,
-                            },
-                            TagItem {
-                                name: "diagnostics".to_string(),
-                                task_count: 7,
-                            },
-                            TagItem {
-                                name: "analyzer".to_string(),
-                                task_count: 3,
-                            },
-                        ];
+                        log::info!("Projects and tags loaded successfully");
 
                         let status_bar = cx.new(|cx| StatusBar::new(cx));
 
                         let sidebar = cx.new(|cx| {
                             Sidebar::new(project_tree, tags, filter_state.clone(), cx)
                                 .on_filter_change(|filter, _window, _cx| {
-                                    println!("Filter changed:");
+                                    log::info!("Filter changed");
                                     if let Some(ref project) = filter.selected_project {
-                                        println!("  Project: {}", project);
+                                        log::debug!("Selected project: {}", project);
                                     } else {
-                                        println!("  Project: All");
+                                        log::debug!("Selected project: All");
                                     }
-                                    println!("  Active tags: {:?}", filter.active_tags);
+                                    if filter.active_tags.is_empty() {
+                                        log::debug!("Active tags: None");
+                                    } else {
+                                        let tags_list: Vec<&str> =
+                                            filter.active_tags.iter().map(|s| s.as_str()).collect();
+                                        log::debug!("Active tags: {}", tags_list.join(", "));
+                                    }
                                 })
                         });
 
@@ -117,6 +146,7 @@ impl App {
                             sidebar,
                             filter_state,
                             status_bar,
+                            task_service,
                         }
                     })
                 },

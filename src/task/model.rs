@@ -214,3 +214,13 @@ pub struct TaskUpdate {
     pub annotations: Option<Vec<String>>,
     pub dependencies: Option<Vec<String>>,
 }
+
+#[derive(Debug, Clone)]
+pub struct TaskOverview {
+    pub tasks: Vec<Task>,
+    pub projects: Vec<(String, usize)>,
+    pub tags: Vec<(String, usize)>,
+    pub total_tasks: usize,
+    pub pending_tasks: usize,
+    pub completed_tasks: usize,
+}

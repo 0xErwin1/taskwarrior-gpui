@@ -1,7 +1,9 @@
 use std::fmt;
 
+#[derive(Debug)]
 pub enum TaskError {
     Storage(String),
+    Config(String),
     NotFound(uuid::Uuid),
     InvalidTag(String),
     InvalidProject(String),
@@ -16,6 +18,7 @@ impl fmt::Display for TaskError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TaskError::Storage(msg) => write!(f, "Storage error: {}", msg),
+            TaskError::Config(msg) => write!(f, "Configuration error: {}", msg),
             TaskError::NotFound(id) => write!(f, "Task not found: {}", id),
             TaskError::InvalidTag(tag) => write!(f, "Invalid tag: {}", tag),
             TaskError::InvalidProject(project) => write!(f, "Invalid project: {}", project),

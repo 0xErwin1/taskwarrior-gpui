@@ -9,34 +9,85 @@ use uuid::Uuid;
 
 use super::error::{TaskError, TaskResult};
 use super::filter::TaskFilter;
-use super::model::{Task, TaskPriority, TaskStatus};
+use super::model::{Task, TaskOverview, TaskStatus};
 
 pub struct TaskService {
     replica: Replica,
     taskdb_dir: PathBuf,
 }
 
+fn read_taskrc_config() -> TaskResult<PathBuf> {
+    if let Ok(taskdata) = std::env::var("TASKDATA") {
+        log::info!("Using TASKDATA env var: {}", taskdata);
+        return Ok(PathBuf::from(taskdata));
+    }
+
+    let taskrc_path = if let Ok(taskrc) = std::env::var("TASKRC") {
+        PathBuf::from(taskrc)
+    } else {
+        dirs::home_dir()
+            .ok_or_else(|| TaskError::Config("Cannot find home directory".into()))?
+            .join(".config/task/taskrc")
+    };
+
+    log::debug!("Looking for taskrc at: {:?}", taskrc_path);
+
+    if taskrc_path.exists() {
+        let content = std::fs::read_to_string(&taskrc_path)
+            .map_err(|e| TaskError::Config(format!("Failed to read taskrc: {}", e)))?;
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with("data.location=") {
+                let path = line.strip_prefix("data.location=").unwrap().trim();
+
+                let expanded = if path.starts_with("~") {
+                    let home = dirs::home_dir()
+                        .ok_or_else(|| TaskError::Config("Cannot expand ~ in path".into()))?;
+                    PathBuf::from(path.replacen("~", home.to_str().unwrap(), 1))
+                } else {
+                    PathBuf::from(path)
+                };
+
+                log::info!("Found data.location in taskrc: {:?}", expanded);
+                return Ok(expanded);
+            }
+        }
+    }
+
+    log::warn!("No taskrc found or data.location not set, using default ~/.task");
+    let default = dirs::home_dir()
+        .ok_or_else(|| TaskError::Config("Cannot find home directory".into()))?
+        .join(".task");
+    Ok(default)
+}
+
 impl TaskService {
     pub fn new() -> TaskResult<Self> {
-        let taskdb_dir = dirs::home_dir()
-            .ok_or_else(|| TaskError::Storage("Cannot find home directory".into()))?
-            .join(".task");
+        let taskdb_dir = read_taskrc_config()?;
+
+        log::debug!("TaskService: Using taskdb_dir: {:?}", taskdb_dir);
+        log::debug!("TaskService: Directory exists: {}", taskdb_dir.exists());
 
         Self::with_path(taskdb_dir)
     }
 
     pub fn with_path(taskdb_dir: PathBuf) -> TaskResult<Self> {
+        log::debug!("TaskService: Initializing with path: {:?}", taskdb_dir);
+
         let storage = StorageConfig::OnDisk {
             taskdb_dir: taskdb_dir.clone(),
             create_if_missing: true,
             access_mode: AccessMode::ReadWrite,
         };
 
-        let replica = Replica::new(
-            storage
-                .into_storage()
-                .map_err(|e| TaskError::Storage(e.to_string()))?,
-        );
+        log::debug!("TaskService: Creating storage...");
+        let replica = Replica::new(storage.into_storage().map_err(|e| {
+            log::error!("TaskService: Storage creation failed: {}", e);
+            TaskError::Storage(e.to_string())
+        })?);
+
+        log::debug!("TaskService: Replica created successfully");
 
         Ok(Self {
             replica,
@@ -92,10 +143,17 @@ impl TaskService {
     }
 
     pub fn get_all_tasks(&mut self) -> TaskResult<Vec<Task>> {
-        let all = self
-            .replica
-            .all_tasks()
-            .map_err(|e| TaskError::Storage(e.to_string()))?;
+        log::debug!("TaskService::get_all_tasks: Fetching all tasks from replica");
+        let all = self.replica.all_tasks().map_err(|e| {
+            log::error!("TaskService::get_all_tasks: Failed to get all tasks: {}", e);
+            TaskError::Storage(e.to_string())
+        })?;
+
+        log::debug!(
+            "TaskService::get_all_tasks: Found {} tasks in storage",
+            all.len()
+        );
+
         let working_set = self
             .replica
             .working_set()
@@ -110,7 +168,68 @@ impl TaskService {
             })
             .collect();
 
+        log::debug!(
+            "TaskService::get_all_tasks: Converted to {} Task objects",
+            tasks.len()
+        );
         Ok(tasks)
+    }
+
+    pub fn get_overview(&mut self) -> TaskResult<TaskOverview> {
+        log::info!("TaskService::get_overview: Fetching complete overview");
+
+        let tasks = self.get_all_tasks()?;
+
+        log::debug!("Processing {} tasks for overview", tasks.len());
+
+        let mut project_counts: HashMap<String, usize> = HashMap::new();
+        let mut tag_counts: HashMap<String, usize> = HashMap::new();
+        let mut pending_count = 0;
+        let mut completed_count = 0;
+
+        for task in &tasks {
+            match task.status {
+                TaskStatus::Pending => pending_count += 1,
+                TaskStatus::Completed => completed_count += 1,
+                _ => {}
+            }
+
+            if matches!(task.status, TaskStatus::Pending) {
+                if let Some(project) = &task.project {
+                    *project_counts.entry(project.clone()).or_insert(0) += 1;
+                }
+
+                for tag in &task.tags {
+                    *tag_counts.entry(tag.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut projects: Vec<(String, usize)> = project_counts.into_iter().collect();
+        projects.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
+        let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
+        tags.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
+        let total_tasks = tasks.len();
+
+        log::info!(
+            "Overview: {} tasks ({} pending, {} completed), {} projects, {} tags",
+            total_tasks,
+            pending_count,
+            completed_count,
+            projects.len(),
+            tags.len()
+        );
+
+        Ok(TaskOverview {
+            tasks,
+            projects,
+            tags,
+            total_tasks,
+            pending_tasks: pending_count,
+            completed_tasks: completed_count,
+        })
     }
 
     pub fn get_filtered_tasks(&mut self, filter: &TaskFilter) -> TaskResult<Vec<Task>> {
@@ -338,7 +457,13 @@ impl TaskService {
     }
 
     pub fn list_tags(&mut self) -> TaskResult<Vec<(String, usize)>> {
+        log::debug!("TaskService::list_tags: Getting all tasks");
         let all_tasks = self.get_all_tasks()?;
+        log::debug!(
+            "TaskService::list_tags: Processing {} tasks for tags",
+            all_tasks.len()
+        );
+
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
 
         for task in all_tasks {
@@ -349,6 +474,11 @@ impl TaskService {
             }
         }
 
+        log::debug!(
+            "TaskService::list_tags: Found {} unique tags",
+            tag_counts.len()
+        );
+
         let mut stats: Vec<(String, usize)> = tag_counts.into_iter().collect();
 
         stats.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
@@ -357,8 +487,14 @@ impl TaskService {
     }
 
     pub fn list_projects(&mut self) -> TaskResult<Vec<(String, usize, usize)>> {
+        log::debug!("TaskService::list_projects: Getting all tasks");
         let all_tasks = self.get_all_tasks()?;
-        let mut project_counts: HashMap<String, (usize, usize)> = HashMap::new(); // (total, pending)
+        log::debug!(
+            "TaskService::list_projects: Processing {} tasks for projects",
+            all_tasks.len()
+        );
+
+        let mut project_counts: HashMap<String, (usize, usize)> = HashMap::new();
 
         for task in all_tasks {
             if let Some(project) = &task.project {
@@ -370,6 +506,11 @@ impl TaskService {
             }
         }
 
+        log::debug!(
+            "TaskService::list_projects: Found {} unique projects",
+            project_counts.len()
+        );
+
         let stats: Vec<(String, usize, usize)> = project_counts
             .into_iter()
             .map(|(name, (task_count, pending_count))| (name, task_count, pending_count))
@@ -379,11 +520,17 @@ impl TaskService {
     }
 
     pub fn get_projects_for_tree(&mut self) -> TaskResult<Vec<(String, usize)>> {
+        log::debug!("TaskService::get_projects_for_tree: Getting project stats");
         let stats = self.list_projects()?;
-        Ok(stats
+        let result: Vec<(String, usize)> = stats
             .into_iter()
             .map(|(name, _total, pending)| (name, pending))
-            .collect())
+            .collect();
+        log::debug!(
+            "TaskService::get_projects_for_tree: Returning {} projects",
+            result.len()
+        );
+        Ok(result)
     }
 
     pub fn add_annotation(&mut self, uuid: Uuid, description: String) -> TaskResult<Task> {

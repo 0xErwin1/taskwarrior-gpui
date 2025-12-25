@@ -288,57 +288,74 @@ impl Render for Sidebar {
                 .bg(theme.background)
                 .child(
                     div()
-                        .px_3()
-                        .py_2()
-                        .border_b_1()
-                        .border_color(theme.border)
+                        .flex()
+                        .flex_col()
+                        .h(gpui::relative(0.5))
+                        .overflow_hidden()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(gpui::FontWeight::BOLD)
-                                .text_color(theme.foreground)
-                                .child("PROJECTS"),
+                                .px_3()
+                                .py_2()
+                                .border_b_1()
+                                .border_color(theme.border)
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::BOLD)
+                                        .text_color(theme.foreground)
+                                        .child("PROJECTS"),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("sidebar-projects")
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_h_0()
+                                .py_2()
+                                .overflow_y_scroll()
+                                .scrollbar_width(gpui::px(6.0))
+                                .children(projects),
                         ),
                 )
                 .child(
                     div()
-                        .id("sidebar-projects")
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .py_2()
-                        .overflow_y_scroll()
-                        .scrollbar_width(gpui::px(6.0))
-                        .children(projects),
+                        .h_px()
+                        .bg(theme.border),
                 )
-                .child(div().px_3().py_2().child(Divider::new(
-                    theme.border,
-                    crate::components::divider::DividerDirection::Horizontal,
-                )))
                 .child(
                     div()
-                        .px_3()
-                        .py_2()
-                        .border_b_1()
-                        .border_color(theme.border)
+                        .flex()
+                        .flex_col()
+                        .h(gpui::relative(0.5))
+                        .overflow_hidden()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(gpui::FontWeight::BOLD)
-                                .text_color(theme.foreground)
-                                .child("TAGS"),
+                                .px_3()
+                                .py_2()
+                                .border_b_1()
+                                .border_color(theme.border)
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::BOLD)
+                                        .text_color(theme.foreground)
+                                        .child("TAGS"),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("sidebar-tags")
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_h_0()
+                                .py_2()
+                                .overflow_y_scroll()
+                                .scrollbar_width(gpui::px(6.0))
+                                .children(tags),
                         ),
-                )
-                .child(
-                    div()
-                        .id("sidebar-tags")
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .py_2()
-                        .overflow_y_scroll()
-                        .scrollbar_width(gpui::px(6.0))
-                        .children(tags),
                 ),
         )
     }
