@@ -3,11 +3,13 @@ use gpui::prelude::*;
 use crate::models::{FilterState, ProjectTree};
 use crate::theme::ActiveTheme;
 use crate::view::sidebar::{Sidebar, TagItem};
+use crate::view::status_bar::StatusBar;
 use gpui::div;
 
 pub(crate) struct App {
     sidebar: gpui::Entity<Sidebar>,
     filter_state: gpui::Entity<FilterState>,
+    status_bar: gpui::Entity<StatusBar>,
 }
 
 impl gpui::Render for App {
@@ -18,10 +20,9 @@ impl gpui::Render for App {
     ) -> impl gpui::IntoElement {
         let theme = _cx.theme();
 
-        div()
+        let content = div()
             .flex()
-            .size_full()
-            .bg(theme.background)
+            .flex_1()
             .child(div().w(gpui::px(250.)).h_full().child(self.sidebar.clone()))
             .child(
                 div()
@@ -35,7 +36,15 @@ impl gpui::Render for App {
                             .text_color(theme.muted)
                             .child("Main panel - TaskTable will go here"),
                     ),
-            )
+            );
+
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .bg(theme.background)
+            .child(content)
+            .child(self.status_bar.clone())
     }
 }
 
@@ -89,6 +98,8 @@ impl App {
                             },
                         ];
 
+                        let status_bar = cx.new(|cx| StatusBar::new(cx));
+
                         let sidebar = cx.new(|cx| {
                             Sidebar::new(project_tree, tags, filter_state.clone(), cx)
                                 .on_filter_change(|filter, _window, _cx| {
@@ -105,6 +116,7 @@ impl App {
                         App {
                             sidebar,
                             filter_state,
+                            status_bar,
                         }
                     })
                 },
