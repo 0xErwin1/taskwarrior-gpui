@@ -8,6 +8,7 @@ pub struct Panel {
     title: Option<String>,
     border: f32,
     padding: f32,
+    style: gpui::StyleRefinement,
 }
 
 impl Panel {
@@ -17,6 +18,7 @@ impl Panel {
             title: None,
             border: 1.0,
             padding: 8.0,
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -47,6 +49,12 @@ impl Panel {
         self.content
             .extend(children.into_iter().map(|c| c.into_any_element()));
         self
+    }
+}
+
+impl gpui::Styled for Panel {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }
 
@@ -81,7 +89,7 @@ impl gpui::RenderOnce for Panel {
             })
             .collect();
 
-        gpui::div()
+        let mut div = gpui::div()
             .size_full()
             .bg(theme.panel)
             .border(gpui::px(self.border))
@@ -92,6 +100,10 @@ impl gpui::RenderOnce for Panel {
             .flex_col()
             .h_full()
             .children(header)
-            .children(children)
+            .children(children);
+
+        *div.style() = self.style;
+
+        div
     }
 }

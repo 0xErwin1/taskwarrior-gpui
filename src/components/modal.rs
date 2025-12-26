@@ -28,6 +28,7 @@ pub struct Modal {
     open: bool,
     close_on_backdrop: bool,
     last_action: Option<ModalAction>,
+    style: gpui::StyleRefinement,
     on_close: Option<Arc<dyn Fn(ModalAction, &mut gpui::Context<Self>) + Send + Sync>>,
     on_save: Option<Arc<dyn Fn(&mut gpui::Context<Self>) + Send + Sync>>,
     on_cancel: Option<Arc<dyn Fn(&mut gpui::Context<Self>) + Send + Sync>>,
@@ -45,6 +46,7 @@ impl Modal {
             open: false,
             close_on_backdrop: true,
             last_action: None,
+            style: gpui::StyleRefinement::default(),
             on_close: None,
             on_save: None,
             on_cancel: None,
@@ -219,6 +221,12 @@ impl Modal {
             on_save(cx);
         }
         self.close_with_action(ModalAction::Save, cx);
+    }
+}
+
+impl gpui::Styled for Modal {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }
 

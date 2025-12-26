@@ -29,6 +29,7 @@ pub struct List {
     items: Vec<ListItem>,
     selected_index: Option<usize>,
     height: Option<gpui::Pixels>,
+    style: gpui::StyleRefinement,
     on_click: Option<Arc<dyn Fn(usize, &ListItem, &mut gpui::Context<Self>) + Send + Sync>>,
     on_hover: Option<Arc<dyn Fn(usize, bool, &ListItem, &mut gpui::Context<Self>) + Send + Sync>>,
 }
@@ -40,6 +41,7 @@ impl List {
             items: Vec::new(),
             selected_index: None,
             height: None,
+            style: gpui::StyleRefinement::default(),
             on_click: None,
             on_hover: None,
         }
@@ -127,6 +129,12 @@ impl List {
     }
 }
 
+impl gpui::Styled for List {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
 impl gpui::Render for List {
     fn render(
         &mut self,
@@ -192,6 +200,8 @@ impl gpui::Render for List {
         if let Some(height) = self.height {
             container = container.h(height);
         }
+
+        *container.style() = self.style.clone();
 
         container
     }

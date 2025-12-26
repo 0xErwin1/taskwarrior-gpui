@@ -57,10 +57,7 @@ pub enum IconName {}
 impl IconNamed for IconName {
     fn path(&self) -> SharedString {
         match self {
-            // Mapear cada variante a su path SVG
-            // IconName::Check => "icons/check.svg".into(),
-            // IconName::Close => "icons/close.svg".into(),
-            _ => "".into(),
+            _ => todo!(),
         }
     }
 }

@@ -1,4 +1,8 @@
-use crate::components::{divider::Divider, panel::Panel};
+use crate::components::{
+    icon::{Icon, IconName, IconSize},
+    label::Label,
+    panel::Panel,
+};
 use crate::models::{FilterState, ProjectTree};
 use crate::theme::ActiveTheme;
 use gpui::{Context, Div, Entity, IntoElement, Window, div, prelude::*, px};
@@ -299,11 +303,10 @@ impl Render for Sidebar {
                                 .border_b_1()
                                 .border_color(theme.border)
                                 .child(
-                                    div()
+                                    Label::new("PROJECTS")
                                         .text_sm()
                                         .font_weight(gpui::FontWeight::BOLD)
-                                        .text_color(theme.foreground)
-                                        .child("PROJECTS"),
+                                        .text_color(theme.foreground),
                                 ),
                         )
                         .child(
@@ -337,11 +340,10 @@ impl Render for Sidebar {
                                 .border_b_1()
                                 .border_color(theme.border)
                                 .child(
-                                    div()
+                                    Label::new("TAGS")
                                         .text_sm()
                                         .font_weight(gpui::FontWeight::BOLD)
-                                        .text_color(theme.foreground)
-                                        .child("TAGS"),
+                                        .text_color(theme.foreground),
                                 ),
                         )
                         .child(
