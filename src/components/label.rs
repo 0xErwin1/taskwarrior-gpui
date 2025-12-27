@@ -24,12 +24,9 @@ impl gpui::Styled for Label {
 }
 
 impl RenderOnce for Label {
-    fn render(mut self, _window: &mut gpui::Window, cx: &mut gpui::App) -> impl gpui::IntoElement {
-        let theme = cx.theme();
-
+    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl gpui::IntoElement {
         let mut div = gpui::div()
             .line_height(gpui::rems(1.25))
-            .text_color(theme.foreground)
             .child(gpui::StyledText::new(&self.text));
 
         *div.style() = self.style;

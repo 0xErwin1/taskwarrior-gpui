@@ -5,12 +5,14 @@ use crate::task::{TaskOverview, TaskService};
 use crate::theme::ActiveTheme;
 use crate::view::sidebar::{Sidebar, TagItem};
 use crate::view::status_bar::StatusBar;
+use crate::view::task_table::TaskTable;
 use gpui::div;
 
 pub(crate) struct App {
     sidebar: gpui::Entity<Sidebar>,
     filter_state: gpui::Entity<FilterState>,
     status_bar: gpui::Entity<StatusBar>,
+    task_table: gpui::Entity<TaskTable>,
     task_service: TaskService,
 }
 
@@ -25,19 +27,21 @@ impl gpui::Render for App {
         let content = div()
             .flex()
             .flex_1()
-            .child(div().w(gpui::px(250.)).h_full().child(self.sidebar.clone()))
+            .min_h_0()
+            .overflow_hidden()
+            .child(
+                div()
+                    .w(gpui::px(250.))
+                    .h_full()
+                    .flex_shrink_0()
+                    .child(self.sidebar.clone()),
+            )
             .child(
                 div()
                     .flex_1()
                     .h_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        div()
-                            .text_color(theme.muted)
-                            .child("Main panel - TaskTable will go here"),
-                    ),
+                    .min_w_0()
+                    .child(self.task_table.clone()),
             );
 
         div()
@@ -88,14 +92,21 @@ impl App {
 
                         let status_bar = cx.new(|cx| StatusBar::new(cx));
 
-                        let sidebar = cx.new(|cx| {
-                            Sidebar::new(project_tree, tags, filter_state.clone(), cx)
+                        let sidebar =
+                            cx.new(|cx| Sidebar::new(project_tree, tags, filter_state.clone(), cx));
+
+                        let task_table = cx
+                            .new(|cx| TaskTable::new("main-task-table", filter_state.clone(), cx));
+
+                        task_table.update(cx, |table, cx| {
+                            table.reload_tasks(&mut task_service, cx);
                         });
 
                         App {
                             sidebar,
                             filter_state,
                             status_bar,
+                            task_table,
                             task_service,
                         }
                     })

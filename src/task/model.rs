@@ -10,6 +10,17 @@ pub enum TaskPriority {
     None,
 }
 
+impl Into<usize> for TaskPriority {
+    fn into(self) -> usize {
+        match self {
+            TaskPriority::High => 0,
+            TaskPriority::Medium => 1,
+            TaskPriority::Low => 2,
+            TaskPriority::None => 3,
+        }
+    }
+}
+
 impl Default for TaskPriority {
     fn default() -> Self {
         TaskPriority::None
@@ -23,6 +34,17 @@ impl std::fmt::Display for TaskPriority {
             TaskPriority::Medium => write!(f, "Medium"),
             TaskPriority::Low => write!(f, "Low"),
             TaskPriority::None => write!(f, "None"),
+        }
+    }
+}
+
+impl Into<String> for TaskPriority {
+    fn into(self) -> String {
+        match self {
+            TaskPriority::High => "High".to_string(),
+            TaskPriority::Medium => "Medium".to_string(),
+            TaskPriority::Low => "Low".to_string(),
+            TaskPriority::None => "None".to_string(),
         }
     }
 }
@@ -56,6 +78,18 @@ pub enum TaskStatus {
 impl Default for TaskStatus {
     fn default() -> Self {
         TaskStatus::Pending
+    }
+}
+
+impl Into<String> for TaskStatus {
+    fn into(self) -> String {
+        match self {
+            TaskStatus::Pending => "Pending".to_string(),
+            TaskStatus::Completed => "Completed".to_string(),
+            TaskStatus::Deleted => "Deleted".to_string(),
+            TaskStatus::Unknown(reason) => format!("Unknown({})", reason),
+            TaskStatus::Recurring => "Recurring".to_string(),
+        }
     }
 }
 
@@ -119,6 +153,7 @@ impl From<taskchampion::Annotation> for TaskAnnotation {
 #[derive(Debug, Clone, Default)]
 pub struct Task {
     pub uuid: uuid::Uuid,
+    pub id: Option<usize>,
     pub status: TaskStatus,
     pub description: String,
     pub project: Option<String>,
@@ -138,6 +173,7 @@ pub struct Task {
 impl Task {
     pub fn new(
         uuid: uuid::Uuid,
+        id: Option<usize>,
         status: TaskStatus,
         description: String,
         project: Option<String>,
@@ -168,6 +204,7 @@ impl Task {
             dependencies,
             is_active,
             is_blocked,
+            id,
             working_id,
         }
     }
@@ -186,6 +223,7 @@ impl From<taskchampion::Task> for Task {
     fn from(task: taskchampion::Task) -> Self {
         Self {
             uuid: task.get_uuid(),
+            id: task.get_value("ID").map(|value| value.parse().unwrap()),
             status: task.get_status().into(),
             description: task.get_description().to_string(),
             project: task.get_value("project").map(|v| v.to_string()),

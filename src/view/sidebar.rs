@@ -1,8 +1,4 @@
-use crate::components::{
-    icon::{Icon, IconName, IconSize},
-    label::Label,
-    panel::Panel,
-};
+use crate::components::{label::Label, panel::Panel};
 use crate::models::{FilterState, ProjectTree};
 use crate::theme::ActiveTheme;
 use gpui::{Context, Div, Entity, IntoElement, Window, div, prelude::*, px};
@@ -284,7 +280,7 @@ impl Render for Sidebar {
         let projects = self.render_projects(cx);
         let tags = self.render_tags(cx);
 
-        Panel::new().border(1.0).padding(0.0).child(
+        Panel::new("Sidebar").border(1.0).padding(0.0).child(
             div()
                 .flex()
                 .flex_col()
@@ -322,11 +318,7 @@ impl Render for Sidebar {
                                 .children(projects),
                         ),
                 )
-                .child(
-                    div()
-                        .h_px()
-                        .bg(theme.border),
-                )
+                .child(div().h_px().bg(theme.border))
                 .child(
                     div()
                         .flex()

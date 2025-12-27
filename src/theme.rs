@@ -10,10 +10,16 @@ pub struct Theme {
     pub border: Color,
     pub error: Color,
     pub success: Color,
+    pub warning: Color,
+    pub info: Color,
     pub selection: Color,
     pub selection_foreground: Color,
     pub text: Color,
     pub text_size: Option<gpui::Size<u32>>,
+
+    pub high: Color,
+    pub medium: Color,
+    pub low: Color,
 }
 
 impl Theme {
@@ -27,10 +33,16 @@ impl Theme {
             border: gpui::rgb(0x313244),
             error: gpui::rgb(0xF38BA8),
             success: gpui::rgb(0xA6E3A1),
+            warning: gpui::rgb(0xF9E2AF),
+            info: gpui::rgb(0x74C7EC),
             selection: gpui::rgb(0x45475A),
             selection_foreground: gpui::rgb(0xCDD6F4),
             text: gpui::rgb(0xCDD6F4),
             text_size: Some(gpui::Size::new(14, 14)),
+
+            high: gpui::rgb(0xF38BA8),
+            medium: gpui::rgb(0xF9E2AF),
+            low: gpui::rgb(0xA6E3A1),
         }
     }
 
@@ -44,10 +56,15 @@ impl Theme {
             border: gpui::rgb(0xE0E0E0),
             error: gpui::rgb(0xFF4444),
             success: gpui::rgb(0x4CAF50),
+            warning: gpui::rgb(0xFFA726),
+            info: gpui::rgb(0x29B6F6),
             selection: gpui::rgb(0xD0D0D0),
             selection_foreground: gpui::rgb(0x333333),
             text: gpui::rgb(0x333333),
             text_size: Some(gpui::Size::new(14, 14)),
+            high: gpui::rgb(0xF38BA8),
+            medium: gpui::rgb(0xF9E2AF),
+            low: gpui::rgb(0xA6E3A1),
         }
     }
 

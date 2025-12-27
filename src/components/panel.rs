@@ -4,6 +4,7 @@ use crate::theme::ActiveTheme;
 
 #[derive(gpui::IntoElement)]
 pub struct Panel {
+    id: gpui::ElementId,
     content: Vec<gpui::AnyElement>,
     title: Option<String>,
     border: f32,
@@ -12,12 +13,13 @@ pub struct Panel {
 }
 
 impl Panel {
-    pub fn new() -> Self {
+    pub fn new(id: impl Into<gpui::ElementId>) -> Self {
         Self {
+            id: id.into(),
             content: Vec::new(),
             title: None,
-            border: 1.0,
-            padding: 8.0,
+            border: 0.0,
+            padding: 0.0,
             style: gpui::StyleRefinement::default(),
         }
     }
@@ -74,20 +76,7 @@ impl gpui::RenderOnce for Panel {
                 .into_any_element()
         });
 
-        let children: Vec<gpui::AnyElement> = self
-            .content
-            .drain(..)
-            .enumerate()
-            .map(|(ix, c)| {
-                gpui::div()
-                    .id(ix)
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .child(c)
-                    .into_any_element()
-            })
-            .collect();
+        let children: Vec<gpui::AnyElement> = self.content.drain(..).collect();
 
         let mut div = gpui::div()
             .size_full()
