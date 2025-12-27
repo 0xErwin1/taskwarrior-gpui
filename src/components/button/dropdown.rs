@@ -300,6 +300,7 @@ impl gpui::Render for Dropdown {
                 .bg(theme.background)
                 .text_sm()
                 .text_color(theme.foreground)
+                .whitespace_nowrap()
                 .child(Label::new(label.clone()))
                 .child(Label::new(arrow).text_color(theme.muted));
 
@@ -308,14 +309,14 @@ impl gpui::Render for Dropdown {
             } else {
                 trigger = trigger
                     .cursor_pointer()
-                    .hover(|s: gpui::StyleRefinement| s.bg(theme.selection));
+                    .hover(|s: gpui::StyleRefinement| s.bg(theme.hover));
             }
 
             trigger.into_any_element()
         };
 
         let mut trigger_wrap = gpui::div()
-            .min_w(gpui::rems(12.0))
+            .flex_shrink_0()
             .child(trigger);
         if !disabled {
             trigger_wrap = trigger_wrap.on_mouse_down(

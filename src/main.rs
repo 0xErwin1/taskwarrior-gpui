@@ -5,6 +5,7 @@ mod components;
 mod models;
 mod task;
 mod theme;
+mod ui;
 mod view;
 
 fn main() {

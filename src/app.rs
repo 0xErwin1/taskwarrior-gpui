@@ -3,6 +3,7 @@ use gpui::prelude::*;
 use crate::models::{FilterState, ProjectTree};
 use crate::task::{TaskOverview, TaskService};
 use crate::theme::ActiveTheme;
+use crate::ui::{card_style, SECTION_GAP, ROOT_PADDING};
 use crate::view::sidebar::{Sidebar, TagItem};
 use crate::view::status_bar::StatusBar;
 use crate::view::task_table::TaskTable;
@@ -24,31 +25,36 @@ impl gpui::Render for App {
     ) -> impl gpui::IntoElement {
         let theme = cx.theme();
 
+        let sidebar = card_style(div(), theme)
+            .w(gpui::px(250.))
+            .h_full()
+            .flex_shrink_0()
+            .overflow_hidden()
+            .child(self.sidebar.clone());
+
+        let main = card_style(div(), theme)
+            .flex_1()
+            .h_full()
+            .min_w_0()
+            .overflow_hidden()
+            .p_0()
+            .child(self.task_table.clone());
+
         let content = div()
             .flex()
             .flex_1()
             .min_h_0()
-            .overflow_hidden()
-            .child(
-                div()
-                    .w(gpui::px(250.))
-                    .h_full()
-                    .flex_shrink_0()
-                    .child(self.sidebar.clone()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .min_w_0()
-                    .child(self.task_table.clone()),
-            );
+            .gap(SECTION_GAP)
+            .child(sidebar)
+            .child(main);
 
         div()
             .flex()
             .flex_col()
             .size_full()
             .bg(theme.background)
+            .p(ROOT_PADDING)
+            .gap(SECTION_GAP)
             .child(content)
             .child(self.status_bar.clone())
     }

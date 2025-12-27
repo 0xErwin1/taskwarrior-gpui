@@ -1,6 +1,6 @@
-use crate::components::{label::Label, panel::Panel};
 use crate::models::{FilterState, ProjectTree};
 use crate::theme::ActiveTheme;
+use crate::ui::{divider_h, section_header};
 use gpui::{Context, Div, Entity, IntoElement, Window, div, prelude::*, px};
 
 #[derive(Debug, Clone)]
@@ -100,9 +100,10 @@ impl Sidebar {
                 .gap_2()
                 .px_3()
                 .py_1()
+                .rounded_sm()
                 .cursor_pointer()
                 .when(is_all_selected, |this| this.bg(theme.selection))
-                .hover(|style| style.bg(theme.panel))
+                .when(!is_all_selected, |this| this.hover(|style| style.bg(theme.hover)))
                 .on_mouse_down(
                     gpui::MouseButton::Left,
                     cx.listener(|view, _event, window, cx| {
@@ -149,9 +150,10 @@ impl Sidebar {
                     .gap_1()
                     .px_3()
                     .py_1()
+                    .rounded_sm()
                     .cursor_pointer()
                     .when(is_selected, |this| this.bg(theme.selection))
-                    .hover(|style| style.bg(theme.panel))
+                    .when(!is_selected, |this| this.hover(|style| style.bg(theme.hover)))
                     .child(div().w(px(indent as f32)))
                     .child(
                         div()
@@ -230,9 +232,10 @@ impl Sidebar {
                     .gap_2()
                     .px_3()
                     .py_1()
+                    .rounded_sm()
                     .cursor_pointer()
                     .when(is_active, |this| this.bg(theme.selection))
-                    .hover(|style| style.bg(theme.panel))
+                    .when(!is_active, |this| this.hover(|style| style.bg(theme.hover)))
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(move |view, _event, window, cx| {
@@ -279,115 +282,96 @@ impl Render for Sidebar {
         let has_project = filter.selected_project.is_some();
         let has_tags = !filter.active_tags.is_empty();
 
-        Panel::new("Sidebar").border(1.0).padding(0.0).child(
-            div()
-                .flex()
-                .flex_col()
-                .size_full()
-                .bg(theme.background)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .px_3()
-                                .py_2()
-                                .border_b_1()
-                                .border_color(theme.border)
-                                .child(
-                                    Label::new("PROJECTS")
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::BOLD)
-                                        .text_color(theme.foreground),
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_2()
+                            .py_2()
+                            .child(section_header("Projects", &theme))
+                            .when(has_project, |this| {
+                                this.child(
+                                    div()
+                                        .id("clear-project")
+                                        .text_xs()
+                                        .text_color(theme.muted)
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(theme.accent))
+                                        .on_mouse_down(
+                                            gpui::MouseButton::Left,
+                                            cx.listener(|view, _, window, cx| {
+                                                view.handle_clear_project(window, cx);
+                                            }),
+                                        )
+                                        .child("Clear"),
                                 )
-                                .when(has_project, |this| {
-                                    this.child(
-                                        div()
-                                            .id("clear-project")
-                                            .text_xs()
-                                            .text_color(theme.muted)
-                                            .cursor_pointer()
-                                            .hover(|s| s.text_color(theme.accent))
-                                            .on_mouse_down(
-                                                gpui::MouseButton::Left,
-                                                cx.listener(|view, _, window, cx| {
-                                                    view.handle_clear_project(window, cx);
-                                                }),
-                                            )
-                                            .child("Clear"),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .id("sidebar-projects")
-                                .flex_1()
-                                .min_h_0()
-                                .py_1()
-                                .overflow_y_scroll()
-                                .children(projects),
-                        ),
-                )
-                .child(div().flex_shrink_0().h_px().bg(theme.border))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .px_3()
-                                .py_2()
-                                .border_b_1()
-                                .border_color(theme.border)
-                                .child(
-                                    Label::new("TAGS")
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::BOLD)
-                                        .text_color(theme.foreground),
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("sidebar-projects")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .children(projects),
+                    ),
+            )
+            .child(divider_h(&theme).my_1())
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_2()
+                            .py_2()
+                            .child(section_header("Tags", &theme))
+                            .when(has_tags, |this| {
+                                this.child(
+                                    div()
+                                        .id("clear-tags")
+                                        .text_xs()
+                                        .text_color(theme.muted)
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(theme.accent))
+                                        .on_mouse_down(
+                                            gpui::MouseButton::Left,
+                                            cx.listener(|view, _, window, cx| {
+                                                view.handle_clear_tags(window, cx);
+                                            }),
+                                        )
+                                        .child("Clear"),
                                 )
-                                .when(has_tags, |this| {
-                                    this.child(
-                                        div()
-                                            .id("clear-tags")
-                                            .text_xs()
-                                            .text_color(theme.muted)
-                                            .cursor_pointer()
-                                            .hover(|s| s.text_color(theme.accent))
-                                            .on_mouse_down(
-                                                gpui::MouseButton::Left,
-                                                cx.listener(|view, _, window, cx| {
-                                                    view.handle_clear_tags(window, cx);
-                                                }),
-                                            )
-                                            .child("Clear"),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .id("sidebar-tags")
-                                .flex_1()
-                                .min_h_0()
-                                .py_1()
-                                .overflow_y_scroll()
-                                .children(tags),
-                        ),
-                ),
-        )
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("sidebar-tags")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .children(tags),
+                    ),
+            )
     }
 }

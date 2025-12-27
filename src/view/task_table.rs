@@ -13,6 +13,7 @@ use crate::{
     models::{DueFilter, FilterState, PriorityFilter, StatusFilter},
     task::{self, TaskFilter, TaskService},
     theme::{self, ActiveTheme},
+    ui::priority_badge,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -604,15 +605,14 @@ impl TaskTable {
         let bar = gpui::div()
             .id("filter-bar")
             .flex()
-            .flex_wrap()
-            .gap_2()
+            .gap_3()
             .items_center()
             .px_4()
             .py_2()
-            .bg(theme.panel)
             .child(
                 gpui::div()
-                    .w(gpui::rems(14.0))
+                    .flex_1()
+                    .min_w(gpui::rems(12.0))
                     .child(self.search_input.clone()),
             )
             .child(self.status_dropdown.clone())
@@ -622,13 +622,14 @@ impl TaskTable {
                 this.child(
                     gpui::div()
                         .id("clear-all-filters")
+                        .flex_shrink_0()
                         .px_2()
                         .py_1()
                         .rounded_md()
                         .text_sm()
                         .text_color(theme.error)
                         .cursor_pointer()
-                        .hover(|s| s.bg(theme.selection))
+                        .hover(|s| s.bg(theme.hover))
                         .on_mouse_down(
                             gpui::MouseButton::Left,
                             cx.listener(|table, _, _, cx| {
@@ -702,10 +703,9 @@ impl TaskTable {
             .gap_2()
             .px_4()
             .py_2()
-            .border_t_1()
-            .border_color(theme.border)
+            .bg(theme.raised)
             .border_b_1()
-            .bg(theme.panel)
+            .border_color(theme.divider)
             .text_sm()
             .font_weight(gpui::FontWeight::MEDIUM)
             .child(
@@ -756,12 +756,12 @@ impl TaskTable {
             .px_4()
             .py_1()
             .border_b_1()
-            .border_color(theme.border)
+            .border_color(theme.divider)
             .text_color(theme.foreground)
             .when(selected, |d| {
                 d.bg(theme.selection).text_color(theme.selection_foreground)
             })
-            .when(!selected, |d| d.hover(|s| s.bg(theme.panel)))
+            .when(!selected, |d| d.hover(|s| s.bg(theme.hover)))
             .cursor_pointer()
             .on_mouse_down(
                 gpui::MouseButton::Left,
@@ -802,11 +802,9 @@ impl TaskTable {
                 components::label::Label::new(row.due.clone()).text_color(self.due_color(row, cx)),
             ))
             .child(
-                gpui::div().w(gpui::rems(5.0)).child(
-                    components::label::Label::new(row.priority.clone())
-                        .text_color(self.priority_color(row, cx))
-                        .font_weight(gpui::FontWeight::BOLD),
-                ),
+                gpui::div()
+                    .w(gpui::rems(5.0))
+                    .child(priority_badge(&row.priority, theme)),
             )
             .child(
                 gpui::div().w(gpui::rems(6.0)).child(
@@ -831,8 +829,8 @@ impl TaskTable {
             .px_4()
             .py_2()
             .border_t_1()
-            .border_color(theme.border)
-            .bg(theme.panel)
+            .border_color(theme.divider)
+            .bg(theme.raised)
             .text_sm()
             .child(
                 components::label::Label::new(format!(
@@ -866,13 +864,15 @@ impl TaskTable {
                                     .px_2()
                                     .py_1()
                                     .rounded_md()
+                                    .border_1()
+                                    .border_color(theme.divider)
                                     .text_color(if can_prev {
                                         theme.foreground
                                     } else {
-                                        theme.muted
+                                        theme.disabled_fg
                                     })
                                     .when(can_prev, |d| {
-                                        d.cursor_pointer().hover(|s| s.bg(theme.selection))
+                                        d.cursor_pointer().hover(|s| s.bg(theme.hover))
                                     })
                                     .when(!can_prev, |d| d.cursor_not_allowed())
                                     .on_mouse_down(
@@ -887,13 +887,15 @@ impl TaskTable {
                                     .px_2()
                                     .py_1()
                                     .rounded_md()
+                                    .border_1()
+                                    .border_color(theme.divider)
                                     .text_color(if can_next {
                                         theme.foreground
                                     } else {
-                                        theme.muted
+                                        theme.disabled_fg
                                     })
                                     .when(can_next, |d| {
-                                        d.cursor_pointer().hover(|s| s.bg(theme.selection))
+                                        d.cursor_pointer().hover(|s| s.bg(theme.hover))
                                     })
                                     .when(!can_next, |d| d.cursor_not_allowed())
                                     .on_mouse_down(
@@ -924,7 +926,7 @@ impl gpui::Render for TaskTable {
                 .size_full()
                 .items_center()
                 .justify_center()
-                .child(components::label::Label::new("Loading...").text_color(theme.text));
+                .child(components::label::Label::new("Loading...").text_color(theme.foreground));
         }
 
         let current_page = self.get_current_page_rows();
@@ -945,7 +947,7 @@ impl gpui::Render for TaskTable {
             .min_h_0()
             .overflow_hidden()
             .bg(theme.background)
-            .child(gpui::div().h(self.filter_bar_height))
+            .child(gpui::div().h(self.filter_bar_height).mb_4())
             .child(header)
             .child(
                 gpui::div()
