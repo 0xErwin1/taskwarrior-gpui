@@ -222,14 +222,8 @@ impl TaskTable {
     pub fn new(
         id: impl Into<gpui::ElementId>,
         filter_state: gpui::Entity<FilterState>,
-        cx: &mut gpui::Context<Self>,
+        _cx: &mut gpui::Context<Self>,
     ) -> Self {
-        cx.observe(&filter_state, |table, _filter, cx| {
-            table.need_reload = true;
-            cx.notify();
-        })
-        .detach();
-
         Self {
             id: id.into(),
             filter_state,
@@ -315,13 +309,9 @@ impl TaskTable {
         self.cached_tasks = filtered_tasks;
         self.apply_sort();
         self.pagination.total_items(self.cached_tasks.len());
-
-        if let Some(idx) = self.selected_global_idx {
-            if idx >= self.cached_tasks.len() {
-                self.selected_global_idx = None;
-                self.selected_page_idx = None;
-            }
-        }
+        self.pagination.current_page(1);
+        self.selected_global_idx = None;
+        self.selected_page_idx = None;
 
         self.recalculate_rows();
 

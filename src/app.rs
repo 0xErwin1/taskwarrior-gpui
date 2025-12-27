@@ -55,6 +55,13 @@ impl gpui::Render for App {
 }
 
 impl App {
+    fn reload_tasks(&mut self, cx: &mut gpui::Context<Self>) {
+        let task_service = &mut self.task_service;
+        self.task_table.update(cx, |table, cx| {
+            table.reload_tasks(task_service, cx);
+        });
+    }
+
     pub fn run() -> () {
         let app = gpui::Application::new();
 
@@ -102,13 +109,20 @@ impl App {
                             table.reload_tasks(&mut task_service, cx);
                         });
 
-                        App {
+                        let app = App {
                             sidebar,
-                            filter_state,
+                            filter_state: filter_state.clone(),
                             status_bar,
                             task_table,
                             task_service,
-                        }
+                        };
+
+                        cx.observe(&filter_state, |app, _, cx| {
+                            app.reload_tasks(cx);
+                        })
+                        .detach();
+
+                        app
                     })
                 },
             )

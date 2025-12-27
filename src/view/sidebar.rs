@@ -2,7 +2,6 @@ use crate::components::{label::Label, panel::Panel};
 use crate::models::{FilterState, ProjectTree};
 use crate::theme::ActiveTheme;
 use gpui::{Context, Div, Entity, IntoElement, Window, div, prelude::*, px};
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct TagItem {
@@ -14,7 +13,6 @@ pub struct Sidebar {
     project_tree: ProjectTree,
     tags: Vec<TagItem>,
     filter_state: Entity<FilterState>,
-    on_filter_change: Option<Arc<dyn Fn(FilterState, &mut Window, &mut Context<Self>) + 'static>>,
 }
 
 impl Sidebar {
@@ -33,16 +31,7 @@ impl Sidebar {
             project_tree,
             tags,
             filter_state,
-            on_filter_change: None,
         }
-    }
-
-    pub fn on_filter_change<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(FilterState, &mut Window, &mut Context<Self>) + 'static,
-    {
-        self.on_filter_change = Some(Arc::new(callback));
-        self
     }
 
     pub fn update_projects(&mut self, project_tree: ProjectTree, cx: &mut Context<Self>) {
@@ -58,17 +47,13 @@ impl Sidebar {
     fn handle_project_click(
         &mut self,
         full_path: Option<String>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.filter_state.update(cx, |filter, _cx| {
+        self.filter_state.update(cx, |filter, cx| {
             filter.select_project(full_path);
+            cx.notify();
         });
-
-        if let Some(callback) = &self.on_filter_change {
-            let filter = self.filter_state.read(cx).clone();
-            callback(filter, window, cx);
-        }
 
         cx.notify();
     }
@@ -78,16 +63,11 @@ impl Sidebar {
         cx.notify();
     }
 
-    fn handle_tag_click(&mut self, tag_name: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.filter_state.update(cx, |filter, _cx| {
+    fn handle_tag_click(&mut self, tag_name: String, _window: &mut Window, cx: &mut Context<Self>) {
+        self.filter_state.update(cx, |filter, cx| {
             filter.toggle_tag(tag_name);
+            cx.notify();
         });
-
-        if let Some(callback) = &self.on_filter_change {
-            let filter = self.filter_state.read(cx).clone();
-            callback(filter, window, cx);
-        }
-
         cx.notify();
     }
 
@@ -284,16 +264,18 @@ impl Render for Sidebar {
             div()
                 .flex()
                 .flex_col()
-                .h_full()
+                .size_full()
                 .bg(theme.background)
                 .child(
                     div()
                         .flex()
                         .flex_col()
-                        .h(gpui::relative(0.5))
+                        .flex_1()
+                        .min_h_0()
                         .overflow_hidden()
                         .child(
                             div()
+                                .flex_shrink_0()
                                 .px_3()
                                 .py_2()
                                 .border_b_1()
@@ -308,25 +290,24 @@ impl Render for Sidebar {
                         .child(
                             div()
                                 .id("sidebar-projects")
-                                .flex()
-                                .flex_col()
                                 .flex_1()
                                 .min_h_0()
-                                .py_2()
+                                .py_1()
                                 .overflow_y_scroll()
-                                .scrollbar_width(gpui::px(6.0))
                                 .children(projects),
                         ),
                 )
-                .child(div().h_px().bg(theme.border))
+                .child(div().flex_shrink_0().h_px().bg(theme.border))
                 .child(
                     div()
                         .flex()
                         .flex_col()
-                        .h(gpui::relative(0.5))
+                        .flex_1()
+                        .min_h_0()
                         .overflow_hidden()
                         .child(
                             div()
+                                .flex_shrink_0()
                                 .px_3()
                                 .py_2()
                                 .border_b_1()
@@ -341,13 +322,10 @@ impl Render for Sidebar {
                         .child(
                             div()
                                 .id("sidebar-tags")
-                                .flex()
-                                .flex_col()
                                 .flex_1()
                                 .min_h_0()
-                                .py_2()
+                                .py_1()
                                 .overflow_y_scroll()
-                                .scrollbar_width(gpui::px(6.0))
                                 .children(tags),
                         ),
                 ),

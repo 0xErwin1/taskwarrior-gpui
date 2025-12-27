@@ -78,21 +78,15 @@ impl gpui::RenderOnce for Panel {
 
         let children: Vec<gpui::AnyElement> = self.content.drain(..).collect();
 
-        let mut div = gpui::div()
+        gpui::div()
             .size_full()
             .bg(theme.panel)
             .border(gpui::px(self.border))
             .border_color(theme.border)
             .rounded_md()
             .p(gpui::px(self.padding))
-            .flex()
-            .flex_col()
-            .h_full()
+            .overflow_hidden()
             .children(header)
-            .children(children);
-
-        *div.style() = self.style;
-
-        div
+            .children(children)
     }
 }
