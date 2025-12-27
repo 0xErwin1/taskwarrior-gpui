@@ -1,5 +1,3 @@
-use gpui::prelude::*;
-
 pub type Color = gpui::Rgba;
 
 #[derive(Debug, Clone)]
@@ -43,7 +41,12 @@ pub struct Theme {
 
 impl Theme {
     pub fn alpha(c: Color, a: f32) -> Color {
-        gpui::Rgba { r: c.r, g: c.g, b: c.b, a: a.clamp(0.0, 1.0) }
+        gpui::Rgba {
+            r: c.r,
+            g: c.g,
+            b: c.b,
+            a: a.clamp(0.0, 1.0),
+        }
     }
 
     pub fn dark() -> Self {

@@ -1,7 +1,5 @@
 use gpui::prelude::*;
 
-use crate::theme::ActiveTheme;
-
 #[derive(gpui::IntoElement)]
 pub struct Label {
     text: gpui::SharedString,

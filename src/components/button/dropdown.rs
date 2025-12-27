@@ -5,6 +5,7 @@ use gpui::prelude::*;
 use crate::components::button::Button;
 use crate::components::label::Label;
 use crate::theme::ActiveTheme;
+use crate::ui::{clickable_control_style, disabled_control_style};
 
 #[derive(Clone, Debug)]
 pub struct DropdownItem {
@@ -288,36 +289,20 @@ impl gpui::Render for Dropdown {
                 .text_color(theme.foreground)
                 .into_any_element()
         } else {
-            let mut trigger = gpui::div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .px_3()
-                .py_2()
-                .rounded_md()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.background)
-                .text_sm()
-                .text_color(theme.foreground)
-                .whitespace_nowrap()
+            let base = gpui::div()
                 .child(Label::new(label.clone()))
                 .child(Label::new(arrow).text_color(theme.muted));
 
-            if disabled {
-                trigger = trigger.text_color(theme.muted).cursor_not_allowed();
+            let trigger = if disabled {
+                disabled_control_style(base, theme)
             } else {
-                trigger = trigger
-                    .cursor_pointer()
-                    .hover(|s: gpui::StyleRefinement| s.bg(theme.hover));
-            }
+                clickable_control_style(base, theme)
+            };
 
             trigger.into_any_element()
         };
 
-        let mut trigger_wrap = gpui::div()
-            .flex_shrink_0()
-            .child(trigger);
+        let mut trigger_wrap = gpui::div().flex_shrink_0().child(trigger);
         if !disabled {
             trigger_wrap = trigger_wrap.on_mouse_down(
                 gpui::MouseButton::Left,

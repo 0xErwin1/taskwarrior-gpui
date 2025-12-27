@@ -103,7 +103,7 @@ impl Sidebar {
                 .rounded_sm()
                 .cursor_pointer()
                 .when(is_all_selected, |this| this.bg(theme.selection))
-                .when(!is_all_selected, |this| this.hover(|style| style.bg(theme.hover)))
+                .when(!is_all_selected, |this| this.hover(|s| s.bg(theme.hover)))
                 .on_mouse_down(
                     gpui::MouseButton::Left,
                     cx.listener(|view, _event, window, cx| {
@@ -153,7 +153,7 @@ impl Sidebar {
                     .rounded_sm()
                     .cursor_pointer()
                     .when(is_selected, |this| this.bg(theme.selection))
-                    .when(!is_selected, |this| this.hover(|style| style.bg(theme.hover)))
+                    .when(!is_selected, |this| this.hover(|s| s.bg(theme.hover)))
                     .child(div().w(px(indent as f32)))
                     .child(
                         div()
@@ -235,7 +235,7 @@ impl Sidebar {
                     .rounded_sm()
                     .cursor_pointer()
                     .when(is_active, |this| this.bg(theme.selection))
-                    .when(!is_active, |this| this.hover(|style| style.bg(theme.hover)))
+                    .when(!is_active, |this| this.hover(|s| s.bg(theme.hover)))
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(move |view, _event, window, cx| {

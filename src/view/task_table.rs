@@ -386,12 +386,20 @@ impl TaskTable {
     }
 
     pub fn reload_tasks(&mut self, task_service: &mut TaskService, cx: &mut gpui::Context<Self>) {
-        let filter_state = self.filter_state.read(cx).clone();
-
         let all_tasks = task_service.get_all_tasks().unwrap_or_else(|e| {
             log::error!("[TaskTable] Failed to load tasks: {}", e);
             vec![]
         });
+
+        self.reload_tasks_from_all(all_tasks, cx);
+    }
+
+    pub fn reload_tasks_from_all(
+        &mut self,
+        all_tasks: Vec<task::Task>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let filter_state = self.filter_state.read(cx).clone();
 
         let task_filter = TaskFilter::from(&filter_state);
         let mut due_filter = task_filter.clone();
@@ -602,6 +610,35 @@ impl TaskTable {
         let has_filters = filter.has_active_filters();
         let view = cx.entity().clone();
 
+        let clear_button = {
+            let mut btn = gpui::div()
+                .id("clear-all-filters")
+                .flex_shrink_0()
+                .min_w(gpui::rems(5.5))
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .text_sm();
+
+            if has_filters {
+                btn = btn
+                    .text_color(theme.error)
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.hover))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|table, _, _, cx| {
+                            table.handle_clear_filters(cx);
+                        }),
+                    )
+                    .child("✕ Clear");
+            } else {
+                btn = btn.child(gpui::div().opacity(0.0).child("✕ Clear"));
+            }
+
+            btn
+        };
+
         let bar = gpui::div()
             .id("filter-bar")
             .flex()
@@ -618,40 +655,22 @@ impl TaskTable {
             .child(self.status_dropdown.clone())
             .child(self.priority_dropdown.clone())
             .child(self.due_dropdown.clone())
-            .when(has_filters, |this| {
-                this.child(
-                    gpui::div()
-                        .id("clear-all-filters")
-                        .flex_shrink_0()
-                        .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .text_sm()
-                        .text_color(theme.error)
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme.hover))
-                        .on_mouse_down(
-                            gpui::MouseButton::Left,
-                            cx.listener(|table, _, _, cx| {
-                                table.handle_clear_filters(cx);
-                            }),
-                        )
-                        .child("✕ Clear"),
-                )
-            });
+            .child(clear_button);
 
-        gpui::div().child(bar).on_children_prepainted(move |bounds, _, cx| {
-            let Some(bounds) = bounds.first() else {
-                return;
-            };
-            let height = bounds.size.height;
-            cx.update_entity(&view, |table, cx| {
-                if table.filter_bar_height != height {
-                    table.filter_bar_height = height;
-                    cx.notify();
-                }
-            });
-        })
+        gpui::div()
+            .child(bar)
+            .on_children_prepainted(move |bounds, _, cx| {
+                let Some(bounds) = bounds.first() else {
+                    return;
+                };
+                let height = bounds.size.height;
+                cx.update_entity(&view, |table, cx| {
+                    if table.filter_bar_height != height {
+                        table.filter_bar_height = height;
+                        cx.notify();
+                    }
+                });
+            })
     }
 
     fn render_header_column(
@@ -917,7 +936,9 @@ impl gpui::Render for TaskTable {
     ) -> impl gpui::IntoElement {
         let theme = cx.theme();
 
-        let panel = components::panel::Panel::new(self.id.clone()).flex().flex_col();
+        let panel = components::panel::Panel::new(self.id.clone())
+            .flex()
+            .flex_col();
 
         if self.need_reload {
             return panel
@@ -959,15 +980,13 @@ impl gpui::Render for TaskTable {
             )
             .child(footer);
 
-        panel
-            .child(body)
-            .child(
-                gpui::div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .child(filter_bar),
-            )
+        panel.child(body).child(
+            gpui::div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .child(filter_bar),
+        )
     }
 }

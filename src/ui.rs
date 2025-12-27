@@ -1,5 +1,5 @@
 use gpui::prelude::*;
-use gpui::{px, Pixels};
+use gpui::{Pixels, px};
 
 use crate::theme::Theme;
 
@@ -8,6 +8,8 @@ pub const CARD_PADDING: Pixels = px(8.0);
 pub const SECTION_GAP: Pixels = px(12.0);
 pub const INSET_GAP: Pixels = px(8.0);
 pub const ROOT_PADDING: Pixels = px(12.0);
+pub const CONTROL_RADIUS: Pixels = px(6.0);
+pub const CONTROL_BORDER: Pixels = px(1.0);
 
 pub fn card_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
     div.bg(theme.card)
@@ -79,4 +81,54 @@ pub fn priority_badge(priority: &str, theme: &Theme) -> gpui::Div {
         .text_xs()
         .font_weight(gpui::FontWeight::MEDIUM)
         .child(priority.to_string())
+}
+
+pub fn control_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
+    div.flex()
+        .items_center()
+        .gap_2()
+        .px_3()
+        .py_2()
+        .rounded(CONTROL_RADIUS)
+        .border(CONTROL_BORDER)
+        .border_color(theme.border)
+        .bg(theme.background)
+        .text_sm()
+        .text_color(theme.foreground)
+        .whitespace_nowrap()
+}
+
+pub fn clickable_control_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
+    control_style(div, theme)
+        .cursor_pointer()
+        .hover(|s| s.bg(theme.hover))
+}
+
+pub fn disabled_control_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
+    control_style(div, theme)
+        .text_color(theme.muted)
+        .cursor_not_allowed()
+}
+
+pub fn ghost_button_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
+    div.flex()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded(CONTROL_RADIUS)
+        .text_sm()
+        .text_color(theme.foreground)
+        .cursor_pointer()
+        .hover(|s| s.bg(theme.hover))
+}
+
+pub fn text_button_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
+    div.flex()
+        .items_center()
+        .gap_1()
+        .text_sm()
+        .text_color(theme.muted)
+        .cursor_pointer()
+        .hover(|s| s.text_color(theme.accent))
 }
