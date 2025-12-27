@@ -71,6 +71,22 @@ impl Sidebar {
         cx.notify();
     }
 
+    fn handle_clear_tags(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.filter_state.update(cx, |filter, cx| {
+            filter.active_tags.clear();
+            cx.notify();
+        });
+        cx.notify();
+    }
+
+    fn handle_clear_project(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.filter_state.update(cx, |filter, cx| {
+            filter.selected_project = None;
+            cx.notify();
+        });
+        cx.notify();
+    }
+
     fn render_projects(&self, cx: &mut Context<Self>) -> Vec<Div> {
         let theme = cx.theme();
         let filter = self.filter_state.read(cx);
@@ -259,6 +275,9 @@ impl Render for Sidebar {
         let theme = cx.theme().clone();
         let projects = self.render_projects(cx);
         let tags = self.render_tags(cx);
+        let filter = self.filter_state.read(cx);
+        let has_project = filter.selected_project.is_some();
+        let has_tags = !filter.active_tags.is_empty();
 
         Panel::new("Sidebar").border(1.0).padding(0.0).child(
             div()
@@ -276,6 +295,9 @@ impl Render for Sidebar {
                         .child(
                             div()
                                 .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .justify_between()
                                 .px_3()
                                 .py_2()
                                 .border_b_1()
@@ -285,7 +307,24 @@ impl Render for Sidebar {
                                         .text_sm()
                                         .font_weight(gpui::FontWeight::BOLD)
                                         .text_color(theme.foreground),
-                                ),
+                                )
+                                .when(has_project, |this| {
+                                    this.child(
+                                        div()
+                                            .id("clear-project")
+                                            .text_xs()
+                                            .text_color(theme.muted)
+                                            .cursor_pointer()
+                                            .hover(|s| s.text_color(theme.accent))
+                                            .on_mouse_down(
+                                                gpui::MouseButton::Left,
+                                                cx.listener(|view, _, window, cx| {
+                                                    view.handle_clear_project(window, cx);
+                                                }),
+                                            )
+                                            .child("Clear"),
+                                    )
+                                }),
                         )
                         .child(
                             div()
@@ -308,6 +347,9 @@ impl Render for Sidebar {
                         .child(
                             div()
                                 .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .justify_between()
                                 .px_3()
                                 .py_2()
                                 .border_b_1()
@@ -317,7 +359,24 @@ impl Render for Sidebar {
                                         .text_sm()
                                         .font_weight(gpui::FontWeight::BOLD)
                                         .text_color(theme.foreground),
-                                ),
+                                )
+                                .when(has_tags, |this| {
+                                    this.child(
+                                        div()
+                                            .id("clear-tags")
+                                            .text_xs()
+                                            .text_color(theme.muted)
+                                            .cursor_pointer()
+                                            .hover(|s| s.text_color(theme.accent))
+                                            .on_mouse_down(
+                                                gpui::MouseButton::Left,
+                                                cx.listener(|view, _, window, cx| {
+                                                    view.handle_clear_tags(window, cx);
+                                                }),
+                                            )
+                                            .child("Clear"),
+                                    )
+                                }),
                         )
                         .child(
                             div()

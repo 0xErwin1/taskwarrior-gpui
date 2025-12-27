@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 
 use super::model::{Task, TaskPriority, TaskStatus};
 use crate::models::{DueFilter, FilterState, PriorityFilter, StatusFilter};
@@ -20,6 +20,7 @@ pub enum DueDateFilter {
     NoDate,
     Before(DateTime<Utc>),
     After(DateTime<Utc>),
+    OnDate(NaiveDate),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -112,6 +113,7 @@ impl From<&FilterState> for TaskFilter {
             DueFilter::Today => Some(DueDateFilter::Today),
             DueFilter::ThisWeek => Some(DueDateFilter::ThisWeek),
             DueFilter::NoDate => Some(DueDateFilter::NoDate),
+            DueFilter::OnDate(date) => Some(DueDateFilter::OnDate(date)),
         };
 
         if !state.search_text.is_empty() {
@@ -225,6 +227,11 @@ impl TaskFilter {
                 }
                 DueDateFilter::After(dt) => {
                     if task.due.map(|d| d <= *dt).unwrap_or(true) {
+                        return false;
+                    }
+                }
+                DueDateFilter::OnDate(date) => {
+                    if !task.due.map(|d| d.date_naive() == *date).unwrap_or(false) {
                         return false;
                     }
                 }

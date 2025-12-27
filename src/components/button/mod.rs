@@ -7,6 +7,7 @@ use gpui::{
 use std::sync::Arc;
 
 use crate::components::icon::{Icon, IconSize};
+use crate::components::label::Label;
 use crate::theme::ActiveTheme;
 
 fn darken(color: gpui::Rgba, amount: f32) -> gpui::Rgba {
@@ -264,7 +265,7 @@ impl RenderOnce for Button {
         }
 
         if let Some(label) = self.label {
-            base = base.child(label);
+            base = base.child(Label::new(label).text_color(fg));
         }
 
         if self.loading {

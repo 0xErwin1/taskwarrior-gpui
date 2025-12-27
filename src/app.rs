@@ -20,9 +20,9 @@ impl gpui::Render for App {
     fn render(
         &mut self,
         _window: &mut gpui::Window,
-        _cx: &mut gpui::Context<Self>,
+        cx: &mut gpui::Context<Self>,
     ) -> impl gpui::IntoElement {
-        let theme = _cx.theme();
+        let theme = cx.theme();
 
         let content = div()
             .flex()

@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use chrono::NaiveDate;
+
 #[derive(Debug, Clone, Default)]
 pub struct FilterState {
     pub selected_project: Option<String>,
@@ -45,6 +47,17 @@ impl StatusFilter {
             Self::Deleted,
         ]
     }
+
+    pub fn from_index(index: usize) -> Self {
+        Self::all_variants().get(index).copied().unwrap_or_default()
+    }
+
+    pub fn to_index(&self) -> usize {
+        Self::all_variants()
+            .iter()
+            .position(|v| v == self)
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +89,17 @@ impl PriorityFilter {
     pub fn all_variants() -> &'static [Self] {
         &[Self::All, Self::High, Self::Medium, Self::Low, Self::None]
     }
+
+    pub fn from_index(index: usize) -> Self {
+        Self::all_variants().get(index).copied().unwrap_or_default()
+    }
+
+    pub fn to_index(&self) -> usize {
+        Self::all_variants()
+            .iter()
+            .position(|v| v == self)
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +109,7 @@ pub enum DueFilter {
     Today,
     ThisWeek,
     NoDate,
+    OnDate(NaiveDate),
 }
 
 impl Default for DueFilter {
@@ -94,16 +119,6 @@ impl Default for DueFilter {
 }
 
 impl DueFilter {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Overdue => "Overdue",
-            Self::Today => "Today",
-            Self::ThisWeek => "This Week",
-            Self::NoDate => "No Date",
-        }
-    }
-
     pub fn all_variants() -> &'static [Self] {
         &[
             Self::All,
@@ -112,6 +127,54 @@ impl DueFilter {
             Self::ThisWeek,
             Self::NoDate,
         ]
+    }
+
+    pub fn from_index(index: usize) -> Self {
+        Self::all_variants().get(index).copied().unwrap_or_default()
+    }
+
+    pub fn to_index(&self) -> usize {
+        Self::all_variants()
+            .iter()
+            .position(|v| v == self)
+            .unwrap_or(0)
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            Self::All => "All".to_string(),
+            Self::Overdue => "Overdue".to_string(),
+            Self::Today => "Today".to_string(),
+            Self::ThisWeek => "This Week".to_string(),
+            Self::NoDate => "No Date".to_string(),
+            Self::OnDate(date) => date.format("%d-%m-%Y").to_string(),
+        }
+    }
+
+    pub fn value_key(&self) -> String {
+        match self {
+            Self::All => "all".to_string(),
+            Self::Overdue => "overdue".to_string(),
+            Self::Today => "today".to_string(),
+            Self::ThisWeek => "this_week".to_string(),
+            Self::NoDate => "none".to_string(),
+            Self::OnDate(date) => format!("date:{}", date.format("%Y-%m-%d")),
+        }
+    }
+
+    pub fn from_value(value: &str) -> Option<Self> {
+        match value {
+            "all" => Some(Self::All),
+            "overdue" => Some(Self::Overdue),
+            "today" => Some(Self::Today),
+            "this_week" => Some(Self::ThisWeek),
+            "none" => Some(Self::NoDate),
+            _ => value.strip_prefix("date:").and_then(|date| {
+                NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                    .ok()
+                    .map(Self::OnDate)
+            }),
+        }
     }
 }
 

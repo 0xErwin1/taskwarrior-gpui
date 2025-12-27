@@ -78,7 +78,8 @@ impl gpui::RenderOnce for Panel {
 
         let children: Vec<gpui::AnyElement> = self.content.drain(..).collect();
 
-        gpui::div()
+        let mut base = gpui::div()
+            .relative()
             .size_full()
             .bg(theme.panel)
             .border(gpui::px(self.border))
@@ -87,6 +88,10 @@ impl gpui::RenderOnce for Panel {
             .p(gpui::px(self.padding))
             .overflow_hidden()
             .children(header)
-            .children(children)
+            .children(children);
+
+        base.style().refine(&self.style);
+
+        base
     }
 }
