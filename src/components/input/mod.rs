@@ -88,6 +88,11 @@ impl Input {
         cx.notify();
     }
 
+    pub fn blur(&self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
+        window.blur();
+        cx.notify();
+    }
+
     fn word_start_before(&self, pos: usize) -> usize {
         if pos == 0 {
             return 0;
@@ -299,6 +304,10 @@ impl Input {
         let key = event.keystroke.key.as_str();
         let ctrl = event.keystroke.modifiers.control;
         let shift = event.keystroke.modifiers.shift;
+
+        if ctrl && (key == "h" || key == "l") {
+            return;
+        }
 
         match key {
             "enter" => {

@@ -129,11 +129,7 @@ impl Render for StatusBar {
                             .items_center()
                             .gap_2()
                             .child(Label::new("✕").text_color(theme.error).text_sm())
-                            .child(
-                                Label::new(error.clone())
-                                    .text_color(theme.error)
-                                    .text_sm(),
-                            ),
+                            .child(Label::new(error.clone()).text_color(theme.error).text_sm()),
                     )
                     .child(
                         div()

@@ -152,6 +152,21 @@ impl ProjectTree {
         }
     }
 
+    pub fn get_expanded_paths(&self) -> HashMap<String, bool> {
+        self.expanded_paths.clone()
+    }
+
+    pub fn restore_expanded_paths(&mut self, paths: HashMap<String, bool>) {
+        for (path, is_expanded) in &paths {
+            if *is_expanded {
+                if let Some(&idx) = self.path_to_index.get(path) {
+                    self.nodes[idx].is_expanded = true;
+                }
+            }
+        }
+        self.expanded_paths = paths;
+    }
+
     pub fn expand_path(&mut self, full_path: &str) {
         let segments: Vec<&str> = full_path.split('.').collect();
         let mut current_path = String::new();

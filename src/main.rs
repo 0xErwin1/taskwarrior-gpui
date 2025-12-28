@@ -2,6 +2,7 @@ use crate::app::App;
 
 mod app;
 mod components;
+mod keymap;
 mod models;
 mod task;
 mod theme;

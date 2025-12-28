@@ -2,16 +2,20 @@ use std::collections::HashMap;
 
 use gpui::prelude::*;
 
+use crate::keymap::{Command, CommandDispatcher, ContextId, FocusTarget, KeyChord, KeymapStack};
 use crate::models::{FilterState, ProjectTree};
 use crate::task::{self, TaskOverview, TaskService};
 use crate::theme::ActiveTheme;
-use crate::ui::{ROOT_PADDING, SECTION_GAP, SIDEBAR_WIDTH, card_style};
+use crate::ui::{ROOT_PADDING, SECTION_GAP, SIDEBAR_WIDTH};
 use crate::view::sidebar::{Sidebar, TagItem};
 use crate::view::status_bar::{StatusBar, StatusBarEvent, SyncState};
 use crate::view::task_table::TaskTable;
 use gpui::div;
 
 pub(crate) struct App {
+    focus_handle: gpui::FocusHandle,
+    focus_target: FocusTarget,
+    keymap: KeymapStack,
     sidebar: gpui::Entity<Sidebar>,
     filter_state: gpui::Entity<FilterState>,
     status_bar: gpui::Entity<StatusBar>,
@@ -27,19 +31,69 @@ impl gpui::Render for App {
     ) -> impl gpui::IntoElement {
         let theme = cx.theme();
 
-        let sidebar = card_style(div(), theme)
+        let sidebar_focused = self.focus_target.is_sidebar();
+
+        let sidebar_border_color = if sidebar_focused {
+            theme.focus_ring
+        } else {
+            theme.divider
+        };
+
+        let sidebar = div()
+            .bg(theme.card)
+            .border_2()
+            .border_color(sidebar_border_color)
+            .rounded(crate::ui::CARD_RADIUS)
+            .p(crate::ui::CARD_PADDING)
             .w(SIDEBAR_WIDTH)
             .h_full()
             .flex_shrink_0()
             .overflow_hidden()
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|app, _event, _window, cx| {
+                    if !app.focus_target.is_sidebar() {
+                        app.focus_target = FocusTarget::SidebarProjects;
+                        app.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.set_section(crate::view::sidebar::SidebarSection::Projects, cx);
+                        });
+                        cx.notify();
+                    }
+                }),
+            )
             .child(self.sidebar.clone());
 
-        let main = card_style(div(), theme)
+        let table_focused = matches!(
+            self.focus_target,
+            FocusTarget::Table | FocusTarget::TableHeaders
+        );
+
+        let table_border_color = if table_focused {
+            theme.focus_ring
+        } else {
+            theme.divider
+        };
+
+        let main = div()
+            .bg(theme.card)
+            .border_2()
+            .border_color(table_border_color)
+            .rounded(crate::ui::CARD_RADIUS)
+            .p(crate::ui::CARD_PADDING)
             .flex_1()
             .h_full()
             .min_w_0()
             .overflow_hidden()
             .p_0()
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|app, _event, _window, cx| {
+                    if !matches!(app.focus_target, FocusTarget::Table) {
+                        app.focus_target = FocusTarget::Table;
+                        cx.notify();
+                    }
+                }),
+            )
             .child(self.task_table.clone());
 
         let content = div()
@@ -57,8 +111,184 @@ impl gpui::Render for App {
             .bg(theme.background)
             .p(ROOT_PADDING)
             .gap(SECTION_GAP)
+            .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(|app, event, window, cx| {
+                app.handle_key_down(event, window, cx);
+            }))
             .child(content)
             .child(self.status_bar.clone())
+    }
+}
+
+impl CommandDispatcher for App {
+    fn dispatch(&mut self, command: Command, cx: &mut gpui::Context<Self>) -> bool {
+        match command {
+            Command::Sync => {
+                self.handle_sync(cx);
+                true
+            }
+            Command::FocusSearch => false,
+            Command::FocusTable => {
+                self.focus_target = match self.focus_target {
+                    FocusTarget::Table => {
+                        self.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.set_section(crate::view::sidebar::SidebarSection::Projects, cx);
+                        });
+                        FocusTarget::SidebarProjects
+                    }
+                    FocusTarget::SidebarProjects => {
+                        self.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.set_section(crate::view::sidebar::SidebarSection::Tags, cx);
+                        });
+                        FocusTarget::SidebarTags
+                    }
+                    _ => FocusTarget::Table,
+                };
+                cx.notify();
+                true
+            }
+            Command::FocusSidebar => {
+                self.focus_target = match self.focus_target {
+                    FocusTarget::Table => {
+                        self.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.set_section(crate::view::sidebar::SidebarSection::Tags, cx);
+                        });
+                        FocusTarget::SidebarTags
+                    }
+                    FocusTarget::SidebarTags => {
+                        self.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.set_section(crate::view::sidebar::SidebarSection::Projects, cx);
+                        });
+                        FocusTarget::SidebarProjects
+                    }
+                    _ => FocusTarget::Table,
+                };
+                cx.notify();
+                true
+            }
+            Command::FocusSidebarProjects => {
+                self.focus_target = FocusTarget::SidebarProjects;
+                self.sidebar.update(cx, |sidebar, cx| {
+                    sidebar.set_section(crate::view::sidebar::SidebarSection::Projects, cx);
+                });
+                cx.notify();
+                true
+            }
+            Command::FocusSidebarTags => {
+                self.focus_target = FocusTarget::SidebarTags;
+                self.sidebar.update(cx, |sidebar, cx| {
+                    sidebar.set_section(crate::view::sidebar::SidebarSection::Tags, cx);
+                });
+                cx.notify();
+                true
+            }
+            Command::SelectNextRow
+            | Command::SelectPrevRow
+            | Command::SelectFirstRow
+            | Command::SelectLastRow => {
+                match self.focus_target {
+                    FocusTarget::SidebarProjects | FocusTarget::SidebarTags => {
+                        self.sidebar
+                            .update(cx, |sidebar, cx| sidebar.dispatch(command, cx));
+                    }
+                    _ => {
+                        self.task_table
+                            .update(cx, |table, cx| table.dispatch(command, cx));
+                    }
+                }
+                true
+            }
+            Command::OpenSelectedTask => {
+                match self.focus_target {
+                    FocusTarget::SidebarProjects | FocusTarget::SidebarTags => {
+                        self.sidebar
+                            .update(cx, |sidebar, cx| sidebar.dispatch(command, cx));
+                    }
+                    _ => {
+                        self.task_table
+                            .update(cx, |table, cx| table.dispatch(command, cx));
+                    }
+                }
+                true
+            }
+            Command::ExpandProject | Command::CollapseProject => {
+                match self.focus_target {
+                    FocusTarget::SidebarProjects => {
+                        self.sidebar
+                            .update(cx, |sidebar, cx| sidebar.dispatch(command, cx));
+                    }
+                    _ => {
+                        self.task_table
+                            .update(cx, |table, cx| table.dispatch(command, cx));
+                    }
+                }
+                true
+            }
+            Command::NextPage | Command::PrevPage | Command::ClearSelection => {
+                self.task_table
+                    .update(cx, |table, cx| table.dispatch(command, cx));
+                true
+            }
+            Command::ToggleDropdown
+            | Command::SelectNextOption
+            | Command::SelectPrevOption
+            | Command::BlurInput => {
+                self.task_table
+                    .update(cx, |table, cx| table.dispatch(command, cx));
+                true
+            }
+            Command::ClearAllFilters => {
+                self.filter_state.update(cx, |state, cx| {
+                    state.clear();
+                    cx.notify();
+                });
+                true
+            }
+            Command::ClearProjectFilter => {
+                self.filter_state.update(cx, |state, cx| {
+                    state.clear_project();
+                    cx.notify();
+                });
+                true
+            }
+            Command::ClearTagFilter => {
+                self.filter_state.update(cx, |state, cx| {
+                    state.clear_tags();
+                    cx.notify();
+                });
+                true
+            }
+            Command::ClearSearchAndDropdowns => {
+                self.filter_state.update(cx, |state, cx| {
+                    state.clear_search_and_dropdowns();
+                    cx.notify();
+                });
+                self.task_table.update(cx, |table, cx| {
+                    table.clear_search_input(cx);
+                    table.reset_dropdowns(cx);
+                });
+                true
+            }
+            Command::HeaderMoveNext => {
+                self.task_table.update(cx, |table, cx| {
+                    table.header_move_next(cx);
+                });
+                true
+            }
+            Command::HeaderMovePrev => {
+                self.task_table.update(cx, |table, cx| {
+                    table.header_move_prev(cx);
+                });
+                true
+            }
+            Command::HeaderCycleSortOrder => {
+                self.task_table.update(cx, |table, cx| {
+                    table.header_cycle_sort_order(cx);
+                });
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -154,6 +384,98 @@ impl App {
         }
     }
 
+    fn handle_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(chord) = KeyChord::from_gpui(event) {
+            let context = self.active_context(cx);
+
+            if let Some(command) = self.keymap.resolve(context, &chord) {
+                match command {
+                    Command::FocusSearch => {
+                        let from_headers = matches!(self.focus_target, FocusTarget::TableHeaders);
+                        self.focus_target = FocusTarget::Table;
+                        self.task_table.update(cx, |table, cx| {
+                            if from_headers {
+                                table.blur_table_headers(cx);
+                            }
+                            table.focus_search_input(window, cx);
+                        });
+                        cx.notify();
+                    }
+                    Command::FocusTableHeaders => {
+                        self.focus_target = FocusTarget::TableHeaders;
+                        self.task_table.update(cx, |table, cx| {
+                            table.blur_search_input(window, cx);
+                            table.set_filter_bar_focus(
+                                crate::view::task_table::FilterBarFocus::None,
+                                cx,
+                            );
+                            table.focus_table_headers(window, cx);
+                        });
+                        cx.notify();
+                    }
+                    Command::FocusTable => {
+                        self.focus_target = FocusTarget::Table;
+                        self.task_table.update(cx, |table, cx| match context {
+                            ContextId::TextInput | ContextId::FilterBar => {
+                                table.blur_search_input(window, cx);
+                                table.set_filter_bar_focus(
+                                    crate::view::task_table::FilterBarFocus::None,
+                                    cx,
+                                );
+                            }
+                            ContextId::TableHeaders => {
+                                table.blur_table_headers(cx);
+                            }
+                            _ => {}
+                        });
+                        cx.notify();
+                    }
+                    Command::FocusFilterNext | Command::FocusFilterPrev => {
+                        self.task_table.update(cx, |table, cx| {
+                            use crate::view::task_table::FilterBarFocus;
+                            let was_on_input =
+                                matches!(table.get_filter_bar_focus(), FilterBarFocus::SearchInput);
+
+                            if command == Command::FocusFilterNext {
+                                table.focus_filter_next(cx);
+                            } else {
+                                table.focus_filter_prev(cx);
+                            }
+
+                            if was_on_input {
+                                table.blur_search_input(window, cx);
+                            }
+
+                            let now_on_input =
+                                matches!(table.get_filter_bar_focus(), FilterBarFocus::SearchInput);
+                            if now_on_input && !was_on_input {
+                                table.focus_search_input(window, cx);
+                            }
+                        });
+                    }
+                    _ => {
+                        self.dispatch(command, cx);
+                    }
+                }
+            }
+        }
+    }
+
+    fn active_context(&self, cx: &gpui::Context<Self>) -> ContextId {
+        if matches!(self.focus_target, FocusTarget::Table) {
+            let filter_context = self.task_table.read(cx).get_active_filter_context();
+            if let Some(context) = filter_context {
+                return context;
+            }
+        }
+        self.focus_target.to_context()
+    }
+
     pub fn run() -> () {
         let app = gpui::Application::new();
 
@@ -161,7 +483,7 @@ impl App {
             app.set_global(crate::theme::Theme::dark());
             app.open_window(
                 gpui::WindowOptions::default(),
-                |_window: &mut gpui::Window, app: &mut gpui::App| {
+                |window: &mut gpui::Window, app: &mut gpui::App| {
                     app.new(|cx: &mut gpui::Context<'_, App>| {
                         let filter_state = cx.new(|_cx| FilterState::new());
 
@@ -201,13 +523,21 @@ impl App {
                             table.reload_tasks(&mut task_service, cx);
                         });
 
+                        let mut keymap = KeymapStack::new();
+                        keymap.push_layer(crate::keymap::defaults::build_default_keymap());
+
                         let app = App {
+                            focus_handle: cx.focus_handle(),
+                            focus_target: FocusTarget::Table,
+                            keymap,
                             sidebar,
                             filter_state: filter_state.clone(),
                             status_bar: status_bar.clone(),
                             task_table,
                             task_service,
                         };
+
+                        window.focus(&app.focus_handle);
 
                         cx.observe(&filter_state, |app, _, cx| {
                             app.reload_tasks(cx);

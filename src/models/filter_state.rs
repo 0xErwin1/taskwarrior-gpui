@@ -206,6 +206,21 @@ impl FilterState {
         self.due_filter = DueFilter::default();
     }
 
+    pub fn clear_project(&mut self) {
+        self.selected_project = None;
+    }
+
+    pub fn clear_tags(&mut self) {
+        self.active_tags.clear();
+    }
+
+    pub fn clear_search_and_dropdowns(&mut self) {
+        self.search_text.clear();
+        self.status_filter = StatusFilter::default();
+        self.priority_filter = PriorityFilter::default();
+        self.due_filter = DueFilter::default();
+    }
+
     pub fn has_active_filters(&self) -> bool {
         self.selected_project.is_some()
             || !self.active_tags.is_empty()

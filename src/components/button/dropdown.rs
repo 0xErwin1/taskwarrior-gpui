@@ -155,6 +155,46 @@ impl Dropdown {
         cx.notify();
     }
 
+    pub fn open(&mut self, cx: &mut gpui::Context<Self>) {
+        if !self.disabled && !self.loading && !self.items.is_empty() {
+            self.open = true;
+            cx.notify();
+        }
+    }
+
+    pub fn close(&mut self, cx: &mut gpui::Context<Self>) {
+        self.open = false;
+        cx.notify();
+    }
+
+    pub fn select_next_item(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.items.is_empty() {
+            return;
+        }
+        let next_index = self
+            .selected_index
+            .map(|i| (i + 1) % self.items.len())
+            .unwrap_or(0);
+        self.set_selected_index(next_index, cx);
+    }
+
+    pub fn select_prev_item(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.items.is_empty() {
+            return;
+        }
+        let prev_index = self
+            .selected_index
+            .map(|i| if i == 0 { self.items.len() - 1 } else { i - 1 })
+            .unwrap_or(self.items.len() - 1);
+        self.set_selected_index(prev_index, cx);
+    }
+
+    pub fn accept_selection(&mut self, cx: &mut gpui::Context<Self>) {
+        if let Some(index) = self.selected_index {
+            self.select_item(index, cx);
+        }
+    }
+
     fn select_item(&mut self, index: usize, cx: &mut gpui::Context<Self>) {
         if self.disabled || self.loading {
             return;

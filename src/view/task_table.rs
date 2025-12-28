@@ -10,13 +10,14 @@ use crate::{
         button::{Dropdown, DropdownItem},
         input::Input,
     },
+    keymap::{Command, CommandDispatcher},
     models::{DueFilter, FilterState, PriorityFilter, StatusFilter},
     task::{self, TaskFilter, TaskService},
     theme::{self, ActiveTheme},
     ui::{
-        priority_badge, table_col_desc_min_width, table_col_due_width, table_col_id_width,
+        DATE_FORMAT, TABLE_FILTER_BAR_INITIAL_HEIGHT, TABLE_MAX_DESCRIPTION_LENGTH, priority_badge,
+        table_col_desc_min_width, table_col_due_width, table_col_id_width,
         table_col_priority_width, table_col_project_width, table_col_status_width,
-        DATE_FORMAT, TABLE_FILTER_BAR_INITIAL_HEIGHT, TABLE_MAX_DESCRIPTION_LENGTH,
     },
 };
 
@@ -31,6 +32,15 @@ pub enum SortColumn {
 }
 
 impl SortColumn {
+    const COLUMN_ORDER: [Self; 6] = [
+        Self::Id,
+        Self::Description,
+        Self::Project,
+        Self::Due,
+        Self::Priority,
+        Self::Status,
+    ];
+
     pub fn label(&self) -> &'static str {
         match self {
             SortColumn::Id => "ID",
@@ -40,6 +50,22 @@ impl SortColumn {
             SortColumn::Priority => "Priority",
             SortColumn::Status => "Status",
         }
+    }
+
+    fn next(self) -> Self {
+        let idx = Self::COLUMN_ORDER
+            .iter()
+            .position(|&c| c == self)
+            .unwrap_or(0);
+        Self::COLUMN_ORDER[(idx + 1) % Self::COLUMN_ORDER.len()]
+    }
+
+    fn prev(self) -> Self {
+        let idx = Self::COLUMN_ORDER
+            .iter()
+            .position(|&c| c == self)
+            .unwrap_or(0);
+        Self::COLUMN_ORDER[(idx + Self::COLUMN_ORDER.len() - 1) % Self::COLUMN_ORDER.len()]
     }
 }
 
@@ -217,6 +243,21 @@ impl From<&task::Task> for TaskRow {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterBarFocus {
+    None,
+    SearchInput,
+    StatusDropdown,
+    PriorityDropdown,
+    DueDropdown,
+}
+
+impl Default for FilterBarFocus {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 pub struct TaskTable {
     id: gpui::ElementId,
     filter_state: gpui::Entity<FilterState>,
@@ -232,6 +273,10 @@ pub struct TaskTable {
     status_dropdown: gpui::Entity<Dropdown>,
     priority_dropdown: gpui::Entity<Dropdown>,
     due_dropdown: gpui::Entity<Dropdown>,
+    filter_bar_focus: FilterBarFocus,
+    filter_bar_focus_handle: gpui::FocusHandle,
+    focused_header: Option<SortColumn>,
+    header_focus_handle: gpui::FocusHandle,
 }
 
 impl TaskTable {
@@ -329,6 +374,10 @@ impl TaskTable {
             status_dropdown,
             priority_dropdown,
             due_dropdown,
+            filter_bar_focus: FilterBarFocus::None,
+            filter_bar_focus_handle: cx.focus_handle(),
+            focused_header: None,
+            header_focus_handle: cx.focus_handle(),
         }
     }
 
@@ -420,6 +469,12 @@ impl TaskTable {
         self.selected_page_idx = None;
 
         self.recalculate_rows();
+
+        if !self.cached_rows.is_empty() {
+            self.selected_page_idx = Some(0);
+            self.selected_global_idx = Some(0);
+        }
+
         self.sync_filter_dropdowns(&due_tasks, &filter_state, cx);
 
         self.need_reload = false;
@@ -598,6 +653,304 @@ impl TaskTable {
         cx.notify();
     }
 
+    pub fn select_next_row(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.cached_rows.is_empty() {
+            return;
+        }
+
+        if self.selected_page_idx.is_none() {
+            self.selected_page_idx = Some(0);
+            self.selected_global_idx = Some(self.pagination.first_item_index());
+            cx.notify();
+            return;
+        }
+
+        let current_page_idx = self.selected_page_idx.unwrap();
+        let current_global_idx = self.selected_global_idx.unwrap();
+
+        if current_global_idx + 1 >= self.cached_rows.len() {
+            return;
+        }
+
+        let next_global_idx = current_global_idx + 1;
+        let page_last_idx = self.pagination.last_item_index() - 1;
+
+        if next_global_idx > page_last_idx {
+            self.pagination.next_page();
+            self.selected_page_idx = Some(0);
+            self.selected_global_idx = Some(next_global_idx);
+        } else {
+            self.selected_page_idx = Some(current_page_idx + 1);
+            self.selected_global_idx = Some(next_global_idx);
+        }
+
+        cx.notify();
+    }
+
+    pub fn select_previous_row(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.cached_rows.is_empty() {
+            return;
+        }
+
+        if self.selected_page_idx.is_none() {
+            let last_global_idx = self.cached_rows.len() - 1;
+            let last_page = (self.cached_rows.len() + self.pagination.page_size - 1)
+                / self.pagination.page_size;
+
+            self.pagination.current_page(last_page);
+
+            let page_first_idx = self.pagination.first_item_index();
+            let page_idx = last_global_idx - page_first_idx;
+
+            self.selected_page_idx = Some(page_idx);
+            self.selected_global_idx = Some(last_global_idx);
+            cx.notify();
+            return;
+        }
+
+        let current_page_idx = self.selected_page_idx.unwrap();
+        let current_global_idx = self.selected_global_idx.unwrap();
+
+        if current_global_idx == 0 {
+            return;
+        }
+
+        let prev_global_idx = current_global_idx - 1;
+        let page_first_idx = self.pagination.first_item_index();
+
+        if prev_global_idx < page_first_idx {
+            self.pagination.previous_page();
+            let new_page_size = (self.pagination.last_item_index()
+                - self.pagination.first_item_index())
+            .min(self.pagination.page_size);
+            self.selected_page_idx = Some(new_page_size - 1);
+            self.selected_global_idx = Some(prev_global_idx);
+        } else {
+            self.selected_page_idx = Some(current_page_idx.saturating_sub(1));
+            self.selected_global_idx = Some(prev_global_idx);
+        }
+
+        cx.notify();
+    }
+
+    pub fn select_first_row(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.cached_rows.is_empty() {
+            return;
+        }
+
+        self.pagination.current_page(1);
+        self.selected_page_idx = Some(0);
+        self.selected_global_idx = Some(0);
+        cx.notify();
+    }
+
+    pub fn select_last_row(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.cached_rows.is_empty() {
+            return;
+        }
+
+        let last_global_idx = self.cached_rows.len() - 1;
+        let last_page =
+            (self.cached_rows.len() + self.pagination.page_size - 1) / self.pagination.page_size;
+
+        self.pagination.current_page(last_page);
+
+        let page_first_idx = self.pagination.first_item_index();
+        let page_idx = last_global_idx - page_first_idx;
+
+        self.selected_page_idx = Some(page_idx);
+        self.selected_global_idx = Some(last_global_idx);
+        cx.notify();
+    }
+
+    pub fn clear_selection(&mut self, cx: &mut gpui::Context<Self>) {
+        self.selected_page_idx = None;
+        self.selected_global_idx = None;
+        cx.notify();
+    }
+
+    pub fn focus_search_input(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
+        self.filter_bar_focus = FilterBarFocus::SearchInput;
+        self.search_input.update(cx, |input, cx| {
+            input.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    pub fn blur_search_input(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
+        window.focus(&self.filter_bar_focus_handle);
+        cx.notify();
+    }
+
+    pub fn clear_search_input(&mut self, cx: &mut gpui::Context<Self>) {
+        self.search_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+    }
+
+    pub fn reset_dropdowns(&mut self, cx: &mut gpui::Context<Self>) {
+        self.status_dropdown.update(cx, |dropdown, cx| {
+            dropdown.set_selected_index(1, cx);
+        });
+        self.priority_dropdown.update(cx, |dropdown, cx| {
+            dropdown.set_selected_index(0, cx);
+        });
+        self.due_dropdown.update(cx, |dropdown, cx| {
+            dropdown.set_selected_index(0, cx);
+        });
+    }
+
+    pub fn get_filter_bar_focus(&self) -> FilterBarFocus {
+        self.filter_bar_focus
+    }
+
+    pub fn set_filter_bar_focus(&mut self, focus: FilterBarFocus, cx: &mut gpui::Context<Self>) {
+        self.filter_bar_focus = focus;
+        cx.notify();
+    }
+
+    pub fn focus_table_headers(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
+        self.focused_header = Some(SortColumn::Id);
+        window.focus(&self.header_focus_handle);
+        cx.notify();
+    }
+
+    pub fn blur_table_headers(&mut self, cx: &mut gpui::Context<Self>) {
+        self.focused_header = None;
+        cx.notify();
+    }
+
+    pub fn header_move_next(&mut self, cx: &mut gpui::Context<Self>) {
+        self.focused_header = Some(self.focused_header.unwrap_or(SortColumn::Id).next());
+        cx.notify();
+    }
+
+    pub fn header_move_prev(&mut self, cx: &mut gpui::Context<Self>) {
+        self.focused_header = Some(self.focused_header.unwrap_or(SortColumn::Id).prev());
+        cx.notify();
+    }
+
+    pub fn header_cycle_sort_order(&mut self, cx: &mut gpui::Context<Self>) {
+        if let Some(column) = self.focused_header {
+            if self.sort_state.column == column {
+                self.sort_state.direction = self.sort_state.direction.toggle();
+            } else {
+                self.sort_state.column = column;
+                self.sort_state.direction = SortDirection::Desc;
+            }
+            self.apply_sort();
+            self.recalculate_rows();
+            cx.notify();
+        }
+    }
+
+    fn close_all_dropdowns(&mut self, cx: &mut gpui::Context<Self>) {
+        self.status_dropdown.update(cx, |d, cx| d.close(cx));
+        self.priority_dropdown.update(cx, |d, cx| d.close(cx));
+        self.due_dropdown.update(cx, |d, cx| d.close(cx));
+    }
+
+    pub fn focus_filter_next(&mut self, cx: &mut gpui::Context<Self>) {
+        use FilterBarFocus::*;
+        self.close_all_dropdowns(cx);
+
+        self.filter_bar_focus = match self.filter_bar_focus {
+            None | SearchInput => StatusDropdown,
+            StatusDropdown => PriorityDropdown,
+            PriorityDropdown => DueDropdown,
+            DueDropdown => SearchInput,
+        };
+        cx.notify();
+    }
+
+    pub fn focus_filter_prev(&mut self, cx: &mut gpui::Context<Self>) {
+        use FilterBarFocus::*;
+        self.close_all_dropdowns(cx);
+
+        self.filter_bar_focus = match self.filter_bar_focus {
+            None | SearchInput => DueDropdown,
+            DueDropdown => PriorityDropdown,
+            PriorityDropdown => StatusDropdown,
+            StatusDropdown => SearchInput,
+        };
+        cx.notify();
+    }
+
+    pub fn toggle_focused_dropdown(&mut self, cx: &mut gpui::Context<Self>) {
+        use FilterBarFocus::*;
+        let toggle = |d: &gpui::Entity<Dropdown>, cx: &mut gpui::Context<Self>| {
+            d.update(cx, |d, cx| {
+                if d.is_open() {
+                    d.accept_selection(cx);
+                } else {
+                    d.open(cx);
+                }
+            });
+            cx.notify();
+        };
+        match self.filter_bar_focus {
+            StatusDropdown => toggle(&self.status_dropdown, cx),
+            PriorityDropdown => toggle(&self.priority_dropdown, cx),
+            DueDropdown => toggle(&self.due_dropdown, cx),
+            _ => {}
+        }
+    }
+
+    pub fn select_next_dropdown_option(&mut self, cx: &mut gpui::Context<Self>) {
+        use FilterBarFocus::*;
+        let select_next = |d: &gpui::Entity<Dropdown>, cx: &mut gpui::Context<Self>| {
+            d.update(cx, |d, cx| {
+                if !d.is_open() {
+                    d.open(cx);
+                }
+                d.select_next_item(cx);
+            });
+            cx.notify();
+        };
+        match self.filter_bar_focus {
+            StatusDropdown => select_next(&self.status_dropdown, cx),
+            PriorityDropdown => select_next(&self.priority_dropdown, cx),
+            DueDropdown => select_next(&self.due_dropdown, cx),
+            _ => {}
+        }
+    }
+
+    pub fn select_prev_dropdown_option(&mut self, cx: &mut gpui::Context<Self>) {
+        use FilterBarFocus::*;
+        let select_prev = |d: &gpui::Entity<Dropdown>, cx: &mut gpui::Context<Self>| {
+            d.update(cx, |d, cx| {
+                if !d.is_open() {
+                    d.open(cx);
+                }
+                d.select_prev_item(cx);
+            });
+            cx.notify();
+        };
+        match self.filter_bar_focus {
+            StatusDropdown => select_prev(&self.status_dropdown, cx),
+            PriorityDropdown => select_prev(&self.priority_dropdown, cx),
+            DueDropdown => select_prev(&self.due_dropdown, cx),
+            _ => {}
+        }
+    }
+
+    pub fn blur_filter_bar(&mut self, cx: &mut gpui::Context<Self>) {
+        self.close_all_dropdowns(cx);
+        self.filter_bar_focus = FilterBarFocus::None;
+        cx.notify();
+    }
+
+    pub fn get_active_filter_context(&self) -> Option<crate::keymap::ContextId> {
+        use FilterBarFocus::*;
+        match self.filter_bar_focus {
+            SearchInput => Some(crate::keymap::ContextId::TextInput),
+            StatusDropdown | PriorityDropdown | DueDropdown => {
+                Some(crate::keymap::ContextId::FilterBar)
+            }
+            FilterBarFocus::None => Option::None,
+        }
+    }
+
     fn handle_clear_filters(&mut self, cx: &mut gpui::Context<Self>) {
         self.search_input.update(cx, |input, cx| {
             input.clear(cx);
@@ -643,6 +996,63 @@ impl TaskTable {
             btn
         };
 
+        use FilterBarFocus::*;
+
+        let status_has_focus = matches!(self.filter_bar_focus, StatusDropdown);
+        let priority_has_focus = matches!(self.filter_bar_focus, PriorityDropdown);
+        let due_has_focus = matches!(self.filter_bar_focus, DueDropdown);
+
+        let status_wrapper = gpui::div()
+            .min_w(gpui::rems(11.0))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _event, _window, cx| {
+                    this.filter_bar_focus = FilterBarFocus::StatusDropdown;
+                    cx.notify();
+                }),
+            )
+            .when(status_has_focus, |div| {
+                div.border_2()
+                    .border_color(theme.focus_ring)
+                    .rounded_md()
+                    .p_px()
+            })
+            .child(self.status_dropdown.clone());
+
+        let priority_wrapper = gpui::div()
+            .min_w(gpui::rems(10.0))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _event, _window, cx| {
+                    this.filter_bar_focus = FilterBarFocus::PriorityDropdown;
+                    cx.notify();
+                }),
+            )
+            .when(priority_has_focus, |div| {
+                div.border_2()
+                    .border_color(theme.focus_ring)
+                    .rounded_md()
+                    .p_px()
+            })
+            .child(self.priority_dropdown.clone());
+
+        let due_wrapper = gpui::div()
+            .min_w(gpui::rems(8.0))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _event, _window, cx| {
+                    this.filter_bar_focus = FilterBarFocus::DueDropdown;
+                    cx.notify();
+                }),
+            )
+            .when(due_has_focus, |div| {
+                div.border_2()
+                    .border_color(theme.focus_ring)
+                    .rounded_md()
+                    .p_px()
+            })
+            .child(self.due_dropdown.clone());
+
         let bar = gpui::div()
             .id("filter-bar")
             .flex()
@@ -654,11 +1064,19 @@ impl TaskTable {
                 gpui::div()
                     .flex_1()
                     .min_w(gpui::rems(12.0))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _event, _window, cx| {
+                            this.close_all_dropdowns(cx);
+                            this.filter_bar_focus = FilterBarFocus::SearchInput;
+                            cx.notify();
+                        }),
+                    )
                     .child(self.search_input.clone()),
             )
-            .child(self.status_dropdown.clone())
-            .child(self.priority_dropdown.clone())
-            .child(self.due_dropdown.clone())
+            .child(status_wrapper)
+            .child(priority_wrapper)
+            .child(due_wrapper)
             .child(clear_button);
 
         gpui::div()
@@ -685,6 +1103,7 @@ impl TaskTable {
     ) -> impl gpui::IntoElement {
         let theme = cx.theme();
         let is_sorted = self.sort_state.column == column;
+        let is_focused = self.focused_header == Some(column);
         let arrow = if is_sorted {
             self.sort_state.direction.arrow()
         } else {
@@ -697,6 +1116,13 @@ impl TaskTable {
             .items_center()
             .gap_1()
             .cursor_pointer()
+            .when(is_focused, |div| {
+                div.border_2()
+                    .border_color(theme.focus_ring)
+                    .rounded_md()
+                    .px_1()
+                    .mx(gpui::px(-1.0))
+            })
             .hover(|s| s.text_color(theme.foreground))
             .on_mouse_down(
                 gpui::MouseButton::Left,
@@ -720,6 +1146,7 @@ impl TaskTable {
         let theme = cx.theme();
 
         gpui::div()
+            .track_focus(&self.header_focus_handle)
             .flex()
             .flex_shrink_0()
             .items_center()
@@ -932,6 +1359,60 @@ impl TaskTable {
     }
 }
 
+impl CommandDispatcher for TaskTable {
+    fn dispatch(&mut self, command: Command, cx: &mut gpui::Context<Self>) -> bool {
+        match command {
+            Command::SelectNextRow => {
+                self.select_next_row(cx);
+                true
+            }
+            Command::SelectPrevRow => {
+                self.select_previous_row(cx);
+                true
+            }
+            Command::SelectFirstRow => {
+                self.select_first_row(cx);
+                true
+            }
+            Command::SelectLastRow => {
+                self.select_last_row(cx);
+                true
+            }
+            Command::NextPage => {
+                self.go_next_page(cx);
+                true
+            }
+            Command::PrevPage => {
+                self.go_previous_page(cx);
+                true
+            }
+            Command::ClearSelection => {
+                self.clear_selection(cx);
+                true
+            }
+            Command::FocusFilterNext | Command::FocusFilterPrev => false,
+            Command::ToggleDropdown => {
+                self.toggle_focused_dropdown(cx);
+                true
+            }
+            Command::SelectNextOption => {
+                self.select_next_dropdown_option(cx);
+                true
+            }
+            Command::SelectPrevOption => {
+                self.select_prev_dropdown_option(cx);
+                true
+            }
+            Command::BlurInput => {
+                self.blur_filter_bar(cx);
+                true
+            }
+            Command::ExpandProject | Command::CollapseProject => false,
+            _ => false,
+        }
+    }
+}
+
 impl gpui::Render for TaskTable {
     fn render(
         &mut self,
@@ -945,13 +1426,17 @@ impl gpui::Render for TaskTable {
             .flex_col();
 
         if self.need_reload {
-            return panel
-                .flex()
-                .flex_col()
-                .size_full()
-                .items_center()
-                .justify_center()
-                .child(components::label::Label::new("Loading...").text_color(theme.foreground));
+            return gpui::div().size_full().child(
+                panel
+                    .flex()
+                    .flex_col()
+                    .size_full()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        components::label::Label::new("Loading...").text_color(theme.foreground),
+                    ),
+            );
         }
 
         let current_page = self.get_current_page_rows();
@@ -972,7 +1457,8 @@ impl gpui::Render for TaskTable {
             .min_h_0()
             .overflow_hidden()
             .bg(theme.background)
-            .child(gpui::div().h(self.filter_bar_height).mb_4())
+            .child(gpui::div().h(self.filter_bar_height))
+            .child(gpui::div().h_4())
             .child(header)
             .child(
                 gpui::div()
@@ -984,13 +1470,18 @@ impl gpui::Render for TaskTable {
             )
             .child(footer);
 
-        panel.child(body).child(
-            gpui::div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .right_0()
-                .child(filter_bar),
-        )
+        gpui::div()
+            .size_full()
+            .track_focus(&self.filter_bar_focus_handle)
+            .child(
+                panel.child(body).child(
+                    gpui::div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .child(filter_bar),
+                ),
+            )
     }
 }
