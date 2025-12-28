@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use gpui::prelude::*;
 
 use crate::models::{FilterState, ProjectTree};
-use crate::task::{self, TaskFilter, TaskOverview, TaskService};
+use crate::task::{self, TaskOverview, TaskService};
 use crate::theme::ActiveTheme;
-use crate::ui::{ROOT_PADDING, SECTION_GAP, card_style};
+use crate::ui::{ROOT_PADDING, SECTION_GAP, SIDEBAR_WIDTH, card_style};
 use crate::view::sidebar::{Sidebar, TagItem};
 use crate::view::status_bar::{StatusBar, StatusBarEvent, SyncState};
 use crate::view::task_table::TaskTable;
@@ -28,7 +28,7 @@ impl gpui::Render for App {
         let theme = cx.theme();
 
         let sidebar = card_style(div(), theme)
-            .w(gpui::px(250.))
+            .w(SIDEBAR_WIDTH)
             .h_full()
             .flex_shrink_0()
             .overflow_hidden()
@@ -68,6 +68,10 @@ impl App {
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
 
         for task in tasks {
+            if !matches!(task.status, task::TaskStatus::Pending) {
+                continue;
+            }
+
             if let Some(project) = &task.project {
                 *project_counts.entry(project.clone()).or_insert(0) += 1;
             }
@@ -91,16 +95,8 @@ impl App {
         (projects, tag_items)
     }
 
-    fn reload_tasks(&mut self, cx: &mut gpui::Context<Self>) {
-        let all_tasks = self.task_service.get_all_tasks().unwrap_or_else(|e| {
-            log::error!("[App] Failed to load tasks: {}", e);
-            vec![]
-        });
-
-        let filter_state = self.filter_state.read(cx).clone();
-        let task_filter = TaskFilter::from(&filter_state);
-        let filtered_tasks = task_filter.apply(&all_tasks);
-        let (projects, tags) = Self::build_sidebar_data(&filtered_tasks);
+    fn update_ui_from_tasks(&mut self, all_tasks: Vec<task::Task>, cx: &mut gpui::Context<Self>) {
+        let (projects, tags) = Self::build_sidebar_data(&all_tasks);
 
         let mut project_tree = ProjectTree::new();
         project_tree.build_from_projects(&projects);
@@ -115,6 +111,24 @@ impl App {
         });
     }
 
+    fn reload_tasks(&mut self, cx: &mut gpui::Context<Self>) {
+        match self.task_service.get_all_tasks() {
+            Ok(all_tasks) => {
+                self.status_bar.update(cx, |bar, cx| {
+                    bar.clear_error(cx);
+                });
+                self.update_ui_from_tasks(all_tasks, cx);
+            }
+            Err(e) => {
+                log::error!("[App] Failed to load tasks: {}", e);
+                self.status_bar.update(cx, |bar, cx| {
+                    bar.set_error(format!("Failed to load tasks: {}", e), cx);
+                });
+                self.update_ui_from_tasks(vec![], cx);
+            }
+        }
+    }
+
     fn handle_sync(&mut self, cx: &mut gpui::Context<Self>) {
         self.status_bar.update(cx, |bar, cx| {
             bar.set_sync_state(SyncState::Syncing, cx);
@@ -123,22 +137,7 @@ impl App {
 
         match self.task_service.get_all_tasks() {
             Ok(all_tasks) => {
-                let filter_state = self.filter_state.read(cx).clone();
-                let task_filter = TaskFilter::from(&filter_state);
-                let filtered_tasks = task_filter.apply(&all_tasks);
-                let (projects, tags) = Self::build_sidebar_data(&filtered_tasks);
-
-                let mut project_tree = ProjectTree::new();
-                project_tree.build_from_projects(&projects);
-
-                self.sidebar.update(cx, |sidebar, cx| {
-                    sidebar.update_projects(project_tree, cx);
-                    sidebar.update_tags(tags, cx);
-                });
-
-                self.task_table.update(cx, |table, cx| {
-                    table.reload_tasks_from_all(all_tasks, cx);
-                });
+                self.update_ui_from_tasks(all_tasks, cx);
 
                 self.status_bar.update(cx, |bar, cx| {
                     bar.set_sync_state(SyncState::Success, cx);

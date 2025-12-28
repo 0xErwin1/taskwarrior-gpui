@@ -13,7 +13,11 @@ use crate::{
     models::{DueFilter, FilterState, PriorityFilter, StatusFilter},
     task::{self, TaskFilter, TaskService},
     theme::{self, ActiveTheme},
-    ui::priority_badge,
+    ui::{
+        priority_badge, table_col_desc_min_width, table_col_due_width, table_col_id_width,
+        table_col_priority_width, table_col_project_width, table_col_status_width,
+        DATE_FORMAT, TABLE_FILTER_BAR_INITIAL_HEIGHT, TABLE_MAX_DESCRIPTION_LENGTH,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,7 +187,7 @@ impl TaskRow {
                 if is_today {
                     "Today".to_string()
                 } else {
-                    dt.format("%d-%m-%Y").to_string()
+                    dt.format(DATE_FORMAT).to_string()
                 }
             }
         }
@@ -201,7 +205,7 @@ impl From<&task::Task> for TaskRow {
         Self {
             uuid: value.uuid,
             id_display: value.working_id.unwrap_or(0).to_string(),
-            description: Self::truncate(&value.description, 50),
+            description: Self::truncate(&value.description, TABLE_MAX_DESCRIPTION_LENGTH),
             project: value.project.clone().unwrap_or(String::new()),
             due: Self::format_date(&value.due, value.is_due_today()),
             priority: value.priority.into(),
@@ -320,7 +324,7 @@ impl TaskTable {
             selected_page_idx: None,
             selected_global_idx: None,
             need_reload: true,
-            filter_bar_height: gpui::px(52.0),
+            filter_bar_height: TABLE_FILTER_BAR_INITIAL_HEIGHT,
             search_input,
             status_dropdown,
             priority_dropdown,
@@ -515,7 +519,7 @@ impl TaskTable {
                 continue;
             }
             let label = Self::format_due_label(date);
-            let value = format!("date:{}", date.format("%Y-%m-%d"));
+            let value = format!("date:{}", date.format(DATE_FORMAT));
             items.push(DropdownItem::with_value(label, value));
         }
 
@@ -538,7 +542,7 @@ impl TaskTable {
         if date == today {
             "Today".to_string()
         } else {
-            date.format("%d-%m-%Y").to_string()
+            date.format(DATE_FORMAT).to_string()
         }
     }
 
@@ -729,7 +733,7 @@ impl TaskTable {
             .font_weight(gpui::FontWeight::MEDIUM)
             .child(
                 gpui::div()
-                    .min_w(gpui::rems(3.0))
+                    .min_w(table_col_id_width())
                     .flex()
                     .items_center()
                     .gap_1()
@@ -739,22 +743,22 @@ impl TaskTable {
             .child(
                 gpui::div()
                     .flex_1()
-                    .min_w(gpui::rems(10.0))
+                    .min_w(table_col_desc_min_width())
                     .child(self.render_header_column(SortColumn::Description, "header-desc", cx)),
             )
             .child(
                 gpui::div()
-                    .w(gpui::rems(10.0))
+                    .w(table_col_project_width())
                     .child(self.render_header_column(SortColumn::Project, "header-project", cx)),
             )
             .child(
                 gpui::div()
-                    .w(gpui::rems(7.0))
+                    .w(table_col_due_width())
                     .child(self.render_header_column(SortColumn::Due, "header-due", cx)),
             )
             .child(
                 gpui::div()
-                    .w(gpui::rems(5.0))
+                    .w(table_col_priority_width())
                     .child(self.render_header_column(SortColumn::Priority, "header-priority", cx)),
             )
             .child(
@@ -788,7 +792,7 @@ impl TaskTable {
             )
             .child(
                 gpui::div()
-                    .min_w(gpui::rems(3.0))
+                    .min_w(table_col_id_width())
                     .flex()
                     .items_center()
                     .gap_1()
@@ -801,7 +805,7 @@ impl TaskTable {
             .child(
                 gpui::div()
                     .flex_1()
-                    .min_w(gpui::rems(10.0))
+                    .min_w(table_col_desc_min_width())
                     .overflow_x_hidden()
                     .child(
                         components::label::Label::new(row.description.clone())
@@ -822,11 +826,11 @@ impl TaskTable {
             ))
             .child(
                 gpui::div()
-                    .w(gpui::rems(5.0))
+                    .w(table_col_priority_width())
                     .child(priority_badge(&row.priority, theme)),
             )
             .child(
-                gpui::div().w(gpui::rems(6.0)).child(
+                gpui::div().w(table_col_status_width()).child(
                     components::label::Label::new(row.status.clone())
                         .text_color(self.status_color(row, cx)),
                 ),

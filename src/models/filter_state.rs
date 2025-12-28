@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use chrono::NaiveDate;
 
+use crate::ui::DATE_FORMAT;
+
 #[derive(Debug, Clone, Default)]
 pub struct FilterState {
     pub selected_project: Option<String>,
@@ -147,7 +149,7 @@ impl DueFilter {
             Self::Today => "Today".to_string(),
             Self::ThisWeek => "This Week".to_string(),
             Self::NoDate => "No Date".to_string(),
-            Self::OnDate(date) => date.format("%d-%m-%Y").to_string(),
+            Self::OnDate(date) => date.format(DATE_FORMAT).to_string(),
         }
     }
 
@@ -158,7 +160,7 @@ impl DueFilter {
             Self::Today => "today".to_string(),
             Self::ThisWeek => "this_week".to_string(),
             Self::NoDate => "none".to_string(),
-            Self::OnDate(date) => format!("date:{}", date.format("%Y-%m-%d")),
+            Self::OnDate(date) => format!("date:{}", date.format(DATE_FORMAT)),
         }
     }
 

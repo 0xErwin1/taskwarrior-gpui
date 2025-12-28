@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, MouseButton, Render, Window, div, prelude::*, rems};
 
 use crate::components::label::Label;
-use crate::theme::ActiveTheme;
+use crate::theme::{ActiveTheme, Theme};
 use crate::ui::divider_v;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +21,7 @@ impl Default for SyncState {
 pub struct StatusBar {
     sync_state: SyncState,
     last_sync_message: String,
+    error_message: Option<String>,
 }
 
 impl StatusBar {
@@ -28,6 +29,7 @@ impl StatusBar {
         Self {
             sync_state: SyncState::default(),
             last_sync_message: String::new(),
+            error_message: None,
         }
     }
 
@@ -44,6 +46,16 @@ impl StatusBar {
     pub fn clear_message(&mut self, cx: &mut Context<Self>) {
         self.last_sync_message.clear();
         self.sync_state = SyncState::Idle;
+        cx.notify();
+    }
+
+    pub fn set_error(&mut self, message: String, cx: &mut Context<Self>) {
+        self.error_message = Some(message);
+        cx.notify();
+    }
+
+    pub fn clear_error(&mut self, cx: &mut Context<Self>) {
+        self.error_message = None;
         cx.notify();
     }
 
@@ -98,7 +110,52 @@ impl Render for StatusBar {
             Label::new("")
         };
 
-        div()
+        let error_banner = if let Some(ref error) = self.error_message {
+            Some(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .w_full()
+                    .px_3()
+                    .py_2()
+                    .bg(Theme::alpha(theme.error, 0.12))
+                    .border_1()
+                    .border_color(theme.error)
+                    .rounded_md()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(Label::new("✕").text_color(theme.error).text_sm())
+                            .child(
+                                Label::new(error.clone())
+                                    .text_color(theme.error)
+                                    .text_sm(),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(Theme::alpha(theme.error, 0.2)))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _event, _window, cx| {
+                                    this.clear_error(cx);
+                                }),
+                            )
+                            .child(Label::new("✕").text_color(theme.error).text_sm()),
+                    ),
+            )
+        } else {
+            None
+        };
+
+        let status_bar_content = div()
             .flex()
             .items_center()
             .justify_between()
@@ -124,7 +181,20 @@ impl Render for StatusBar {
                     .gap_2()
                     .child(divider_v(&theme).h(rems(1.0)))
                     .child(sync_button),
-            )
+            );
+
+        if let Some(error) = error_banner {
+            div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .gap_2()
+                .p_2()
+                .child(error)
+                .child(status_bar_content)
+        } else {
+            status_bar_content
+        }
     }
 }
 

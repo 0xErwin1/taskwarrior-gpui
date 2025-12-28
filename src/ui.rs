@@ -1,5 +1,5 @@
 use gpui::prelude::*;
-use gpui::{Pixels, px};
+use gpui::{Pixels, px, rems};
 
 use crate::theme::Theme;
 
@@ -10,6 +10,43 @@ pub const INSET_GAP: Pixels = px(8.0);
 pub const ROOT_PADDING: Pixels = px(12.0);
 pub const CONTROL_RADIUS: Pixels = px(6.0);
 pub const CONTROL_BORDER: Pixels = px(1.0);
+
+pub const SIDEBAR_WIDTH: Pixels = px(250.0);
+
+pub const TABLE_MAX_DESCRIPTION_LENGTH: usize = 50;
+pub const TABLE_FILTER_BAR_INITIAL_HEIGHT: Pixels = px(52.0);
+
+#[inline(always)]
+pub fn table_col_id_width() -> gpui::Rems {
+    rems(3.0)
+}
+
+#[inline(always)]
+pub fn table_col_desc_min_width() -> gpui::Rems {
+    rems(10.0)
+}
+
+#[inline(always)]
+pub fn table_col_project_width() -> gpui::Rems {
+    rems(10.0)
+}
+
+#[inline(always)]
+pub fn table_col_due_width() -> gpui::Rems {
+    rems(7.0)
+}
+
+#[inline(always)]
+pub fn table_col_priority_width() -> gpui::Rems {
+    rems(5.0)
+}
+
+#[inline(always)]
+pub fn table_col_status_width() -> gpui::Rems {
+    rems(6.0)
+}
+
+pub const DATE_FORMAT: &str = "%Y-%m-%d";
 
 pub fn card_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
     div.bg(theme.card)
