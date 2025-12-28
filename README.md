@@ -14,20 +14,24 @@ A desktop GUI for [TaskWarrior](https://taskwarrior.org/) built with [GPUI](http
 
 ## Requirements
 
-- Rust 2024 edition
-- TaskWarrior
+- Rust (2024 edition)
+- TaskWarrior installed and configured
 
-## Build
-
-```bash
-cargo build --release
-```
-
-## Run
+## Installation
 
 ```bash
-cargo run
+# Clone the repository
+git clone https://github.com/0xErwin1/taskwarrior-gpui.git
+cd taskwarrior-gpui
+
+# Option 1: Run directly
+cargo run --release
+
+# Option 2: Install globally
+cargo install --path .
 ```
+
+The application will use your existing TaskWarrior data directory.
 
 ## License
 
