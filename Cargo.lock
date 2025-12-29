@@ -6497,7 +6497,7 @@ dependencies = [
 
 [[package]]
 name = "task-warrior-gpui"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
