@@ -78,10 +78,14 @@ impl Sidebar {
     fn handle_project_click(
         &mut self,
         full_path: Option<String>,
+        selected_index: Option<usize>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         cx.emit(SidebarEvent::Focused(SidebarSection::Projects));
+        self.selected_section = SidebarSection::Projects;
+        self.selected_index = selected_index;
+        self.scroll_to_selected();
         self.filter_state.update(cx, |filter, cx| {
             filter.select_project(full_path);
             cx.notify();
@@ -95,8 +99,17 @@ impl Sidebar {
         cx.notify();
     }
 
-    fn handle_tag_click(&mut self, tag_name: String, _window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_tag_click(
+        &mut self,
+        tag_name: String,
+        selected_index: usize,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.emit(SidebarEvent::Focused(SidebarSection::Tags));
+        self.selected_section = SidebarSection::Tags;
+        self.selected_index = Some(selected_index);
+        self.scroll_to_selected();
         self.filter_state.update(cx, |filter, cx| {
             filter.toggle_tag(tag_name);
             cx.notify();
@@ -314,7 +327,7 @@ impl Sidebar {
                 .on_mouse_down(
                     gpui::MouseButton::Left,
                     cx.listener(|view, _event, window, cx| {
-                        view.handle_project_click(None, window, cx);
+                        view.handle_project_click(None, Some(0), window, cx);
                     }),
                 )
                 .child(
@@ -416,7 +429,12 @@ impl Sidebar {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(move |view, _event, window, cx| {
-                                    view.handle_project_click(Some(full_path.clone()), window, cx);
+                                    view.handle_project_click(
+                                        Some(full_path.clone()),
+                                        Some(idx + 1),
+                                        window,
+                                        cx,
+                                    );
                                 }),
                             )
                             .child(
@@ -475,7 +493,7 @@ impl Sidebar {
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(move |view, _event, window, cx| {
-                            view.handle_tag_click(tag_name.clone(), window, cx);
+                            view.handle_tag_click(tag_name.clone(), idx, window, cx);
                         }),
                     )
                     .child(
