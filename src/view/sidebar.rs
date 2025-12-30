@@ -18,6 +18,10 @@ pub enum SidebarSection {
     Tags,
 }
 
+pub enum SidebarEvent {
+    Focused(SidebarSection),
+}
+
 pub struct Sidebar {
     project_tree: ProjectTree,
     tags: Vec<TagItem>,
@@ -77,6 +81,7 @@ impl Sidebar {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        cx.emit(SidebarEvent::Focused(SidebarSection::Projects));
         self.filter_state.update(cx, |filter, cx| {
             filter.select_project(full_path);
             cx.notify();
@@ -91,6 +96,7 @@ impl Sidebar {
     }
 
     fn handle_tag_click(&mut self, tag_name: String, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(SidebarEvent::Focused(SidebarSection::Tags));
         self.filter_state.update(cx, |filter, cx| {
             filter.toggle_tag(tag_name);
             cx.notify();
@@ -99,6 +105,7 @@ impl Sidebar {
     }
 
     fn handle_clear_tags(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(SidebarEvent::Focused(SidebarSection::Tags));
         self.filter_state.update(cx, |filter, cx| {
             filter.active_tags.clear();
             cx.notify();
@@ -107,6 +114,7 @@ impl Sidebar {
     }
 
     fn handle_clear_project(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(SidebarEvent::Focused(SidebarSection::Projects));
         self.filter_state.update(cx, |filter, cx| {
             filter.selected_project = None;
             cx.notify();
@@ -542,6 +550,8 @@ impl CommandDispatcher for Sidebar {
         }
     }
 }
+
+impl gpui::EventEmitter<SidebarEvent> for Sidebar {}
 
 impl Render for Sidebar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

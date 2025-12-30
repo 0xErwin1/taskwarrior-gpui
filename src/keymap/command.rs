@@ -25,6 +25,8 @@ pub enum Command {
     // Modal
     CloseModal,
     SaveModal,
+    ModalScrollUp,
+    ModalScrollDown,
 
     // Filter
     ApplySearch,
@@ -70,6 +72,8 @@ impl Command {
             "BlurInput" => Some(Self::BlurInput),
             "CloseModal" => Some(Self::CloseModal),
             "SaveModal" => Some(Self::SaveModal),
+            "ModalScrollUp" => Some(Self::ModalScrollUp),
+            "ModalScrollDown" => Some(Self::ModalScrollDown),
             "ApplySearch" => Some(Self::ApplySearch),
             "ClearFilters" => Some(Self::ClearFilters),
             "ClearAllFilters" => Some(Self::ClearAllFilters),
@@ -110,6 +114,8 @@ impl Command {
             Self::BlurInput => "BlurInput",
             Self::CloseModal => "CloseModal",
             Self::SaveModal => "SaveModal",
+            Self::ModalScrollUp => "ModalScrollUp",
+            Self::ModalScrollDown => "ModalScrollDown",
             Self::ApplySearch => "ApplySearch",
             Self::ClearFilters => "ClearFilters",
             Self::ClearAllFilters => "ClearAllFilters",

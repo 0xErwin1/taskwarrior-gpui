@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::error::{TaskError, TaskResult};
 use super::filter::TaskFilter;
-use super::model::{Task, TaskOverview, TaskStatus};
+use super::model::{Task, TaskDetailVm, TaskOverview, TaskStatus, TaskSummary};
 
 pub struct TaskService {
     replica: Replica,
@@ -142,6 +142,15 @@ impl TaskService {
         }
     }
 
+    pub fn get_task_detail(
+        &mut self,
+        uuid: Uuid,
+        all_tasks: &[TaskSummary],
+    ) -> TaskResult<TaskDetailVm> {
+        let task = self.get_task(uuid)?.ok_or(TaskError::NotFound(uuid))?;
+        Ok(TaskDetailVm::from_task(&task, all_tasks))
+    }
+
     pub fn get_all_tasks(&mut self) -> TaskResult<Vec<Task>> {
         log::debug!("TaskService::get_all_tasks: Fetching all tasks from replica");
         let all = self.replica.all_tasks().map_err(|e| {
@@ -232,9 +241,10 @@ impl TaskService {
         })
     }
 
-    pub fn get_filtered_tasks(&mut self, filter: &TaskFilter) -> TaskResult<Vec<Task>> {
+    pub fn get_filtered_tasks(&mut self, filter: &TaskFilter) -> TaskResult<Vec<TaskSummary>> {
         let all = self.get_all_tasks()?;
-        Ok(filter.apply(&all))
+        let summaries: Vec<TaskSummary> = all.iter().map(TaskSummary::from).collect();
+        Ok(filter.apply(&summaries))
     }
 
     pub fn update_task(

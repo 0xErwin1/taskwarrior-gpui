@@ -12,7 +12,7 @@ use crate::{
     },
     keymap::{Command, CommandDispatcher},
     models::{DueFilter, FilterState, PriorityFilter, StatusFilter},
-    task::{self, TaskFilter, TaskService},
+    task::{self, TaskFilter, TaskService, TaskSummary},
     theme::{self, ActiveTheme},
     ui::{
         DATE_FORMAT, TABLE_FILTER_BAR_INITIAL_HEIGHT, TABLE_MAX_DESCRIPTION_LENGTH, priority_badge,
@@ -220,8 +220,8 @@ impl TaskRow {
     }
 }
 
-impl From<&task::Task> for TaskRow {
-    fn from(value: &task::Task) -> Self {
+impl From<&task::TaskSummary> for TaskRow {
+    fn from(value: &task::TaskSummary) -> Self {
         let status = if value.is_active {
             "Active".to_string()
         } else {
@@ -261,7 +261,7 @@ impl Default for FilterBarFocus {
 pub struct TaskTable {
     id: gpui::ElementId,
     filter_state: gpui::Entity<FilterState>,
-    cached_tasks: Vec<task::Task>,
+    cached_tasks: Vec<task::TaskSummary>,
     cached_rows: Vec<TaskRow>,
     sort_state: SortState,
     pagination: PaginationState,
@@ -438,18 +438,9 @@ impl TaskTable {
         &self.cached_rows[start..end]
     }
 
-    pub fn reload_tasks(&mut self, task_service: &mut TaskService, cx: &mut gpui::Context<Self>) {
-        let all_tasks = task_service.get_all_tasks().unwrap_or_else(|e| {
-            log::error!("[TaskTable] Failed to load tasks: {}", e);
-            vec![]
-        });
-
-        self.reload_tasks_from_all(all_tasks, cx);
-    }
-
     pub fn reload_tasks_from_all(
         &mut self,
-        all_tasks: Vec<task::Task>,
+        all_tasks: Vec<task::TaskSummary>,
         cx: &mut gpui::Context<Self>,
     ) {
         let filter_state = self.filter_state.read(cx).clone();
@@ -488,7 +479,7 @@ impl TaskTable {
 
     fn sync_filter_dropdowns(
         &mut self,
-        due_tasks: &[task::Task],
+        due_tasks: &[task::TaskSummary],
         filter_state: &FilterState,
         cx: &mut gpui::Context<Self>,
     ) {
@@ -523,7 +514,7 @@ impl TaskTable {
         });
     }
 
-    fn build_due_items(tasks: &[task::Task]) -> Vec<DropdownItem> {
+    fn build_due_items(tasks: &[task::TaskSummary]) -> Vec<DropdownItem> {
         let now = chrono::Utc::now();
         let today = now.date_naive();
         let week_end = now + chrono::Duration::days(7);
@@ -767,6 +758,12 @@ impl TaskTable {
         self.selected_page_idx = None;
         self.selected_global_idx = None;
         cx.notify();
+    }
+
+    pub fn selected_task_uuid(&self) -> Option<uuid::Uuid> {
+        self.selected_global_idx
+            .and_then(|idx| self.cached_tasks.get(idx))
+            .map(|task| task.uuid)
     }
 
     pub fn focus_search_input(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
@@ -1198,6 +1195,7 @@ impl TaskTable {
     fn render_row(&self, idx: usize, row: &TaskRow, cx: &gpui::Context<Self>) -> gpui::Div {
         let theme = cx.theme();
         let selected = self.selected_page_idx == Some(idx);
+        let row_uuid = row.uuid;
 
         gpui::div()
             .flex()
@@ -1215,7 +1213,12 @@ impl TaskTable {
             .cursor_pointer()
             .on_mouse_down(
                 gpui::MouseButton::Left,
-                cx.listener(move |table, _, _, cx| table.select_row(idx, cx)),
+                cx.listener(move |table, event: &gpui::MouseDownEvent, _window, cx| {
+                    table.select_row(idx, cx);
+                    if event.click_count >= 2 {
+                        cx.emit(TaskTableEvent::OpenTask(row_uuid));
+                    }
+                }),
             )
             .child(
                 gpui::div()
@@ -1412,6 +1415,12 @@ impl CommandDispatcher for TaskTable {
         }
     }
 }
+
+pub enum TaskTableEvent {
+    OpenTask(uuid::Uuid),
+}
+
+impl gpui::EventEmitter<TaskTableEvent> for TaskTable {}
 
 impl gpui::Render for TaskTable {
     fn render(

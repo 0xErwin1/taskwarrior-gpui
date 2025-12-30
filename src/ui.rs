@@ -47,6 +47,7 @@ pub fn table_col_status_width() -> gpui::Rems {
 }
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
+pub const DATE_TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 pub fn card_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
     div.bg(theme.card)

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use super::model::{Task, TaskPriority, TaskStatus};
+use super::model::{TaskPriority, TaskStatus, TaskSummary};
 use crate::models::{DueFilter, FilterState, PriorityFilter, StatusFilter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -131,7 +131,7 @@ impl From<FilterState> for TaskFilter {
 }
 
 impl TaskFilter {
-    pub fn matches(&self, task: &Task) -> bool {
+    pub fn matches(&self, task: &TaskSummary) -> bool {
         if let Some(status) = &self.status {
             match status {
                 TaskStatus::Pending => {
@@ -267,7 +267,7 @@ impl TaskFilter {
         true
     }
 
-    pub fn apply(&self, tasks: &[Task]) -> Vec<Task> {
+    pub fn apply(&self, tasks: &[TaskSummary]) -> Vec<TaskSummary> {
         tasks.iter().filter(|t| self.matches(t)).cloned().collect()
     }
 }

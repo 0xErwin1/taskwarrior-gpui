@@ -405,6 +405,26 @@ pub fn build_default_keymap() -> KeymapLayer {
     );
     layer.bind(
         ContextId::Modal,
+        KeyChord::new(Key::Char('j'), Mods::none()),
+        Command::ModalScrollDown,
+    );
+    layer.bind(
+        ContextId::Modal,
+        KeyChord::new(Key::Char('k'), Mods::none()),
+        Command::ModalScrollUp,
+    );
+    layer.bind(
+        ContextId::Modal,
+        KeyChord::new(Key::ArrowDown, Mods::none()),
+        Command::ModalScrollDown,
+    );
+    layer.bind(
+        ContextId::Modal,
+        KeyChord::new(Key::ArrowUp, Mods::none()),
+        Command::ModalScrollUp,
+    );
+    layer.bind(
+        ContextId::Modal,
         KeyChord::new(Key::Enter, Mods::ctrl()),
         Command::SaveModal,
     );

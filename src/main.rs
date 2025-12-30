@@ -2,6 +2,7 @@ use crate::app::App;
 
 mod app;
 mod components;
+mod dispatcher;
 mod keymap;
 mod models;
 mod task;
