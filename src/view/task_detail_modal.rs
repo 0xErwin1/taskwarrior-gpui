@@ -4,11 +4,163 @@ use std::sync::Arc;
 use crate::components::label::Label;
 use crate::components::modal::ModalFrame;
 use crate::task::model::TaskLinkVm;
-use crate::task::{self, TaskDetailState};
-use crate::theme::Theme;
+use crate::task::{self, TaskDetailState, TaskDetailVm};
+use crate::theme::{ActiveTheme, Theme};
 use crate::ui::{DATE_FORMAT, DATE_TIME_FORMAT};
 
-pub fn render_task_detail_modal(
+pub enum TaskDetailModalEvent {
+    Closed,
+}
+
+pub struct TaskDetailModal {
+    state: TaskDetailState,
+    is_open: bool,
+    focus_handle: gpui::FocusHandle,
+    scroll_handle: gpui::ScrollHandle,
+}
+
+impl TaskDetailModal {
+    pub fn new(cx: &mut gpui::Context<Self>) -> Self {
+        Self {
+            state: TaskDetailState::default(),
+            is_open: false,
+            focus_handle: cx.focus_handle(),
+            scroll_handle: gpui::ScrollHandle::new(),
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.is_open
+    }
+
+    pub fn focus_handle(&self) -> &gpui::FocusHandle {
+        &self.focus_handle
+    }
+
+    pub fn open_with_detail(
+        &mut self,
+        detail: TaskDetailVm,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(window) = window {
+            window.focus(&self.focus_handle);
+        }
+
+        self.is_open = true;
+        self.scroll_handle = gpui::ScrollHandle::new();
+        self.scroll_handle.scroll_to_item(0);
+        self.state = TaskDetailState::Ready(detail);
+        cx.notify();
+    }
+
+    pub fn open_with_error(
+        &mut self,
+        task_id: uuid::Uuid,
+        error: String,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(window) = window {
+            window.focus(&self.focus_handle);
+        }
+
+        self.is_open = true;
+        self.scroll_handle = gpui::ScrollHandle::new();
+        self.scroll_handle.scroll_to_item(0);
+        self.state = TaskDetailState::Error(task_id, error);
+        cx.notify();
+    }
+
+    pub fn open_loading(
+        &mut self,
+        task_id: uuid::Uuid,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(window) = window {
+            window.focus(&self.focus_handle);
+        }
+
+        self.is_open = true;
+        self.scroll_handle = gpui::ScrollHandle::new();
+        self.scroll_handle.scroll_to_item(0);
+        self.state = TaskDetailState::Loading(task_id);
+        cx.notify();
+    }
+
+    pub fn set_detail(&mut self, detail: TaskDetailVm, cx: &mut gpui::Context<Self>) {
+        self.state = TaskDetailState::Ready(detail);
+        cx.notify();
+    }
+
+    pub fn set_error(&mut self, task_id: uuid::Uuid, error: String, cx: &mut gpui::Context<Self>) {
+        self.state = TaskDetailState::Error(task_id, error);
+        cx.notify();
+    }
+
+    pub fn close(&mut self, cx: &mut gpui::Context<Self>) {
+        if !self.is_open {
+            return;
+        }
+
+        self.is_open = false;
+        self.state = TaskDetailState::Idle;
+        cx.emit(TaskDetailModalEvent::Closed);
+        cx.notify();
+    }
+
+    pub fn scroll(&self, delta: i32, cx: &mut gpui::Context<Self>) {
+        let handle = &self.scroll_handle;
+        let current = if delta > 0 {
+            handle.bottom_item()
+        } else {
+            handle.top_item()
+        };
+        let next = if delta > 0 {
+            current.saturating_add(1)
+        } else {
+            current.saturating_sub(1)
+        };
+
+        handle.scroll_to_item(next);
+        cx.notify();
+    }
+}
+
+impl gpui::EventEmitter<TaskDetailModalEvent> for TaskDetailModal {}
+
+impl gpui::Render for TaskDetailModal {
+    fn render(
+        &mut self,
+        _window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        if !self.is_open {
+            return gpui::div().into_any_element();
+        }
+
+        let theme = cx.theme();
+
+        let on_close_backdrop = cx.listener(|modal, _event: &gpui::MouseDownEvent, _window, cx| {
+            modal.close(cx);
+        });
+        let on_close_click = cx.listener(|modal, _event: &gpui::MouseDownEvent, _window, cx| {
+            modal.close(cx);
+        });
+
+        render_task_detail_modal(
+            &self.state,
+            &self.focus_handle,
+            &self.scroll_handle,
+            theme,
+            on_close_backdrop,
+            on_close_click,
+        )
+    }
+}
+
+fn render_task_detail_modal(
     detail_state: &TaskDetailState,
     focus_handle: &gpui::FocusHandle,
     scroll_handle: &gpui::ScrollHandle,

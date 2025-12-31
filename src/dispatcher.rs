@@ -3,6 +3,20 @@ use crate::{
     keymap::{Command, CommandDispatcher, FocusTarget},
 };
 
+impl App {
+    fn close_task_detail(&mut self, cx: &mut gpui::Context<Self>) {
+        self.task_detail_modal.update(cx, |modal, cx| {
+            modal.close(cx);
+        });
+    }
+
+    fn scroll_task_detail(&self, delta: i32, cx: &mut gpui::Context<Self>) {
+        self.task_detail_modal.update(cx, |modal, cx| {
+            modal.scroll(delta, cx);
+        });
+    }
+}
+
 impl CommandDispatcher for App {
     fn dispatch(&mut self, command: Command, cx: &mut gpui::Context<Self>) -> bool {
         match command {
@@ -94,11 +108,11 @@ impl CommandDispatcher for App {
                 true
             }
             Command::CloseModal => {
-                self.close_task_detail(None, cx);
+                self.close_task_detail(cx);
                 true
             }
             Command::SaveModal => {
-                self.close_task_detail(None, cx);
+                self.close_task_detail(cx);
                 true
             }
             Command::ModalScrollUp => {

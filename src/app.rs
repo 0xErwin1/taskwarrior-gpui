@@ -3,16 +3,15 @@ use std::collections::HashMap;
 use gpui::prelude::*;
 
 use crate::{
-    components::modal::ModalState,
     keymap::{Command, CommandDispatcher, ContextId, FocusTarget, KeyChord, KeymapStack},
     models::{FilterState, ProjectTree},
-    task::{self, TaskDetailState, TaskOverview, TaskService, TaskSummary},
+    task::{self, TaskOverview, TaskService, TaskSummary},
     theme::ActiveTheme,
     view::{
         app_layout,
         sidebar::{Sidebar, SidebarEvent, SidebarSection, TagItem},
         status_bar::{StatusBar, StatusBarEvent, SyncState},
-        task_detail_modal,
+        task_detail_modal::{TaskDetailModal, TaskDetailModalEvent},
         task_table::{TaskTable, TaskTableEvent},
     },
 };
@@ -25,14 +24,10 @@ pub(super) struct App {
     pub(super) filter_state: gpui::Entity<FilterState>,
     pub(super) status_bar: gpui::Entity<StatusBar>,
     pub(super) task_table: gpui::Entity<TaskTable>,
+    pub(super) task_detail_modal: gpui::Entity<TaskDetailModal>,
     pub(super) task_service: TaskService,
     pub(super) tasks: Vec<TaskSummary>,
-    pub(super) selected_task_id: Option<uuid::Uuid>,
-    pub(super) task_detail_state: TaskDetailState,
-    pub(super) modal_state: ModalState,
-    pub(super) modal_focus_handle: gpui::FocusHandle,
     pub(super) focus_before_modal: FocusTarget,
-    pub(super) modal_scroll_handle: gpui::ScrollHandle,
 }
 
 impl gpui::Render for App {
@@ -63,22 +58,8 @@ impl gpui::Render for App {
             }
         });
 
-        let modal = if self.modal_state.open {
-            let on_close_backdrop =
-                cx.listener(|app, _event: &gpui::MouseDownEvent, window, cx| {
-                    app.close_task_detail(Some(window), cx);
-                });
-            let on_close_click = cx.listener(|app, _event: &gpui::MouseDownEvent, window, cx| {
-                app.close_task_detail(Some(window), cx);
-            });
-            Some(task_detail_modal::render_task_detail_modal(
-                &self.task_detail_state,
-                &self.modal_focus_handle,
-                &self.modal_scroll_handle,
-                theme,
-                on_close_backdrop,
-                on_close_click,
-            ))
+        let modal = if self.task_detail_modal.read(cx).is_open() {
+            Some(self.task_detail_modal.clone().into_any_element())
         } else {
             None
         };
@@ -207,7 +188,9 @@ impl App {
             let context = self.active_context(cx);
 
             if let Some(command) = self.keymap.resolve(context, &chord) {
-                if self.modal_state.open {
+                let modal_is_open = self.task_detail_modal.read(cx).is_open();
+
+                if modal_is_open {
                     match command {
                         Command::CloseModal
                         | Command::SaveModal
@@ -295,7 +278,7 @@ impl App {
         window: Option<&mut gpui::Window>,
         cx: &mut gpui::Context<Self>,
     ) {
-        if self.modal_state.open {
+        if self.task_detail_modal.read(cx).is_open() {
             return;
         }
 
@@ -314,76 +297,26 @@ impl App {
         cx: &mut gpui::Context<Self>,
     ) {
         self.focus_before_modal = self.focus_target;
-        self.modal_state.open = true;
-        if let Some(window) = window {
-            window.focus(&self.modal_focus_handle);
-        }
-        self.modal_scroll_handle = gpui::ScrollHandle::new();
-        self.modal_scroll_handle.scroll_to_item(0);
-
-        if self.selected_task_id == Some(task_id) {
-            if matches!(self.task_detail_state, TaskDetailState::Ready(_)) {
-                cx.notify();
-                return;
-            }
-        }
-
-        self.selected_task_id = Some(task_id);
-        self.task_detail_state = TaskDetailState::Loading(task_id);
-        cx.notify();
 
         let tasks = self.tasks.clone();
         match self.task_service.get_task_detail(task_id, &tasks) {
             Ok(detail) => {
-                self.task_detail_state = TaskDetailState::Ready(detail);
+                self.task_detail_modal.update(cx, |modal, cx| {
+                    modal.open_with_detail(detail, window, cx);
+                });
             }
             Err(e) => {
-                self.task_detail_state = TaskDetailState::Error(task_id, e.to_string());
+                self.task_detail_modal.update(cx, |modal, cx| {
+                    modal.open_with_error(task_id, e.to_string(), window, cx);
+                });
             }
         }
 
-        cx.notify();
-    }
-
-    pub(super) fn close_task_detail(
-        &mut self,
-        window: Option<&mut gpui::Window>,
-        cx: &mut gpui::Context<Self>,
-    ) {
-        if !self.modal_state.open {
-            return;
-        }
-
-        self.modal_state.open = false;
-        self.selected_task_id = None;
-        self.focus_target = self.focus_before_modal;
-
-        if let Some(window) = window {
-            window.focus(&self.focus_handle);
-        }
-
-        cx.notify();
-    }
-
-    pub(super) fn scroll_task_detail(&self, delta: i32, cx: &mut gpui::Context<Self>) {
-        let handle = &self.modal_scroll_handle;
-        let current = if delta > 0 {
-            handle.bottom_item()
-        } else {
-            handle.top_item()
-        };
-        let next = if delta > 0 {
-            current.saturating_add(1)
-        } else {
-            current.saturating_sub(1)
-        };
-
-        handle.scroll_to_item(next);
         cx.notify();
     }
 
     fn active_context(&self, cx: &gpui::Context<Self>) -> ContextId {
-        if self.modal_state.open {
+        if self.task_detail_modal.read(cx).is_open() {
             return ContextId::Modal;
         }
         if matches!(self.focus_target, FocusTarget::Table) {
@@ -440,8 +373,12 @@ impl App {
 
                         let task_table = cx
                             .new(|cx| TaskTable::new("main-task-table", filter_state.clone(), cx));
+
+                        let task_detail_modal = cx.new(|cx| TaskDetailModal::new(cx));
+
                         let task_table_events = task_table.clone();
                         let sidebar_events = sidebar.clone();
+                        let modal_events = task_detail_modal.clone();
 
                         task_table.update(cx, |table, cx| {
                             table.reload_tasks_from_all(task_summaries.clone(), cx);
@@ -450,7 +387,7 @@ impl App {
                         let mut keymap = KeymapStack::new();
                         keymap.push_layer(crate::keymap::defaults::build_default_keymap());
 
-                        let app = App {
+                        let app_instance = App {
                             focus_handle: cx.focus_handle(),
                             focus_target: FocusTarget::Table,
                             keymap,
@@ -458,17 +395,13 @@ impl App {
                             filter_state: filter_state.clone(),
                             status_bar: status_bar.clone(),
                             task_table,
+                            task_detail_modal,
                             task_service,
                             tasks: task_summaries,
-                            selected_task_id: None,
-                            task_detail_state: TaskDetailState::default(),
-                            modal_state: ModalState::default(),
-                            modal_focus_handle: cx.focus_handle(),
                             focus_before_modal: FocusTarget::Table,
-                            modal_scroll_handle: gpui::ScrollHandle::new(),
                         };
 
-                        window.focus(&app.focus_handle);
+                        window.focus(&app_instance.focus_handle);
 
                         cx.observe(&filter_state, |app, _, cx| {
                             app.reload_tasks(cx);
@@ -481,6 +414,7 @@ impl App {
                             }
                         })
                         .detach();
+
                         cx.subscribe(&sidebar_events, |app, _sidebar, event, cx| match event {
                             SidebarEvent::Focused(section) => {
                                 app.focus_target = match section {
@@ -491,16 +425,25 @@ impl App {
                             }
                         })
                         .detach();
+
                         cx.subscribe(&task_table_events, |app, _table, event, cx| match event {
                             TaskTableEvent::OpenTask(task_id) => {
-                                if !app.modal_state.open {
+                                if !app.task_detail_modal.read(cx).is_open() {
                                     app.open_task_detail(*task_id, None, cx);
                                 }
                             }
                         })
                         .detach();
 
-                        app
+                        cx.subscribe(&modal_events, |app, _modal, event, cx| match event {
+                            TaskDetailModalEvent::Closed => {
+                                app.focus_target = app.focus_before_modal;
+                                cx.notify();
+                            }
+                        })
+                        .detach();
+
+                        app_instance
                     })
                 },
             )
