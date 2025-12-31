@@ -615,32 +615,72 @@ where
 
     let mut sections = vec![overview_section, tags_section, deps_section];
 
-    if !detail.annotations.is_empty() {
-        let items = detail.annotations.iter().map(|annotation| {
-            gpui::div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .min_w_0()
-                .child(
-                    Label::new(annotation.entry.format(DATE_TIME_FORMAT).to_string())
-                        .text_xs()
-                        .text_color(theme.muted),
-                )
-                .child(
-                    Label::new(annotation.content.clone())
-                        .text_sm()
-                        .text_color(value_color),
-                )
-                .into_any_element()
-        });
-
-        let annotations_section = section(
+    let annotations_section = if detail.annotations.is_empty() {
+        section(
             "Annotations",
-            gpui::div().flex().flex_col().gap_2().children(items),
-        );
-        sections.push(annotations_section);
-    }
+            gpui::div()
+                .text_sm()
+                .text_color(theme.muted)
+                .child("No annotations"),
+        )
+    } else {
+        let count = detail.annotations.len();
+        let items = detail
+            .annotations
+            .iter()
+            .enumerate()
+            .map(|(index, annotation)| {
+                let timestamp = annotation.entry.format(DATE_TIME_FORMAT).to_string();
+                let content_for_copy = annotation.content.clone();
+
+                let copy_action = gpui::div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .cursor_pointer()
+                    .hover(|s| s.text_color(theme.accent))
+                    .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, app| {
+                        app.write_to_clipboard(gpui::ClipboardItem::new_string(
+                            content_for_copy.clone(),
+                        ));
+                    })
+                    .child(Label::new("Copy"));
+
+                let lines = annotation.content.split('\n').map(|line| {
+                    let text = if line.is_empty() { " " } else { line };
+                    Label::new(text.to_string())
+                        .text_sm()
+                        .text_color(value_color)
+                        .into_any_element()
+                });
+
+                let mut item = gpui::div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .min_w_0()
+                    .child(
+                        gpui::div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(Label::new(timestamp).text_xs().text_color(theme.muted))
+                            .child(copy_action),
+                    )
+                    .child(gpui::div().flex().flex_col().gap_1().children(lines));
+
+                if index + 1 < count {
+                    item = item.child(gpui::div().mt_2().h(gpui::px(1.0)).bg(theme.divider));
+                }
+
+                item.into_any_element()
+            });
+
+        section(
+            "Annotations",
+            gpui::div().flex().flex_col().gap_3().children(items),
+        )
+    };
+    sections.push(annotations_section);
 
     sections.push(dates_section);
     sections.push(meta_section);
