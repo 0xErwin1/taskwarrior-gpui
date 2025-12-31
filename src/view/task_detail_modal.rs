@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::components::label::Label;
 use crate::components::modal::ModalFrame;
+use crate::components::toast::{ToastGlobal, ToastKind};
 use crate::task::model::TaskLinkVm;
 use crate::task::{self, TaskDetailState, TaskDetailVm};
 use crate::theme::{ActiveTheme, Theme};
@@ -632,7 +633,6 @@ where
             .map(|(index, annotation)| {
                 let timestamp = annotation.entry.format(DATE_TIME_FORMAT).to_string();
                 let content_for_copy = annotation.content.clone();
-
                 let copy_action = gpui::div()
                     .text_xs()
                     .text_color(theme.muted)
@@ -642,6 +642,10 @@ where
                         app.write_to_clipboard(gpui::ClipboardItem::new_string(
                             content_for_copy.clone(),
                         ));
+                        let toast_host = app.global::<ToastGlobal>().host.clone();
+                        app.update_entity(&toast_host, |host, cx| {
+                            host.push(ToastKind::Info, "Annotation copied", cx);
+                        });
                     })
                     .child(Label::new("Copy"));
 

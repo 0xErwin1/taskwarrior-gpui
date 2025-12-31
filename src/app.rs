@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use gpui::prelude::*;
 
 use crate::{
+    components::toast::{ToastGlobal, ToastHost},
     keymap::{Command, CommandDispatcher, ContextId, FocusTarget, KeyChord, KeymapStack},
     models::{FilterState, ProjectTree},
     task::{self, TaskOverview, TaskService, TaskSummary},
@@ -25,6 +26,7 @@ pub(super) struct App {
     pub(super) status_bar: gpui::Entity<StatusBar>,
     pub(super) task_table: gpui::Entity<TaskTable>,
     pub(super) task_detail_modal: gpui::Entity<TaskDetailModal>,
+    pub(super) toast_host: gpui::Entity<ToastHost>,
     pub(super) task_service: TaskService,
     pub(super) tasks: Vec<TaskSummary>,
     pub(super) focus_before_modal: FocusTarget,
@@ -71,6 +73,7 @@ impl gpui::Render for App {
             self.sidebar.clone(),
             self.task_table.clone(),
             self.status_bar.clone(),
+            self.toast_host.clone(),
             on_root_key_down,
             on_sidebar_mouse_down,
             on_table_mouse_down,
@@ -367,6 +370,10 @@ impl App {
                             .collect();
 
                         let status_bar = cx.new(|cx| StatusBar::new(cx));
+                        let toast_host = cx.new(|cx| ToastHost::new(cx));
+                        cx.set_global(ToastGlobal {
+                            host: toast_host.clone(),
+                        });
 
                         let sidebar =
                             cx.new(|cx| Sidebar::new(project_tree, tags, filter_state.clone(), cx));
@@ -396,6 +403,7 @@ impl App {
                             status_bar: status_bar.clone(),
                             task_table,
                             task_detail_modal,
+                            toast_host,
                             task_service,
                             tasks: task_summaries,
                             focus_before_modal: FocusTarget::Table,

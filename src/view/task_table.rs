@@ -592,17 +592,6 @@ impl TaskTable {
         }
     }
 
-    fn priority_color(&self, row: &TaskRow, cx: &gpui::Context<Self>) -> theme::Color {
-        let theme = cx.theme();
-
-        match row.priority.as_str() {
-            "High" => theme.high,
-            "Medium" => theme.medium,
-            "Low" => theme.low,
-            _ => theme.foreground,
-        }
-    }
-
     fn due_color(&self, row: &TaskRow, cx: &gpui::Context<Self>) -> theme::Color {
         let theme = cx.theme();
 

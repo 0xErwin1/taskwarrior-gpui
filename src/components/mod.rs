@@ -6,3 +6,4 @@ pub mod label;
 pub mod list;
 pub mod modal;
 pub mod panel;
+pub mod toast;

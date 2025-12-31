@@ -1,5 +1,6 @@
 use gpui::prelude::*;
 
+use crate::components::toast::ToastHost;
 use crate::keymap::FocusTarget;
 use crate::theme::Theme;
 use crate::ui::{CARD_PADDING, CARD_RADIUS, ROOT_PADDING, SECTION_GAP, SIDEBAR_WIDTH};
@@ -14,6 +15,7 @@ pub fn render_app_layout(
     sidebar: gpui::Entity<Sidebar>,
     task_table: gpui::Entity<TaskTable>,
     status_bar: gpui::Entity<StatusBar>,
+    toast_host: gpui::Entity<ToastHost>,
     on_root_key_down: impl Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_sidebar_mouse_down: impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_table_mouse_down: impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
@@ -86,6 +88,16 @@ pub fn render_app_layout(
     if let Some(modal) = modal {
         root = root.child(modal);
     }
+
+    let toast_layer = gpui::div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .child(toast_host);
+
+    root = root.child(toast_layer);
 
     root.into_any_element()
 }

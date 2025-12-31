@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::{Pixels, px, rems};
 
-use crate::theme::Theme;
+use crate::theme::{Color, Theme};
 
 pub const CARD_RADIUS: Pixels = px(6.0);
 pub const CARD_PADDING: Pixels = px(8.0);
@@ -169,4 +169,14 @@ pub fn text_button_style(div: gpui::Div, theme: &Theme) -> gpui::Div {
         .text_color(theme.muted)
         .cursor_pointer()
         .hover(|s| s.text_color(theme.accent))
+}
+
+pub fn mix_color(base: Color, tint: Color, amount: f32) -> Color {
+    let amount = amount.clamp(0.0, 1.0);
+    gpui::Rgba {
+        r: base.r + (tint.r - base.r) * amount,
+        g: base.g + (tint.g - base.g) * amount,
+        b: base.b + (tint.b - base.b) * amount,
+        a: 1.0,
+    }
 }

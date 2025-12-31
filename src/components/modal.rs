@@ -48,13 +48,7 @@ impl ModalFrame {
 
 impl gpui::RenderOnce for ModalFrame {
     fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl gpui::IntoElement {
-        let mut panel_wrap = gpui::div().child(self.panel);
-
-        if let Some(handler) = self.on_close {
-            panel_wrap = panel_wrap.on_mouse_down_out(move |event, window, app| {
-                (handler)(event, window, app);
-            });
-        }
+        let panel_wrap = gpui::div().child(self.panel);
 
         let root = gpui::div()
             .id(self.id)
@@ -65,14 +59,20 @@ impl gpui::RenderOnce for ModalFrame {
             .occlude()
             .track_focus(&self.focus);
 
-        root.child(
-            gpui::div()
-                .size_full()
-                .bg(self.backdrop)
-                .absolute()
-                .top_0()
-                .left_0(),
-        )
+        let mut backdrop = gpui::div()
+            .size_full()
+            .bg(self.backdrop)
+            .absolute()
+            .top_0()
+            .left_0();
+
+        if let Some(handler) = self.on_close {
+            backdrop = backdrop.on_mouse_down(gpui::MouseButton::Left, move |event, window, app| {
+                (handler)(event, window, app);
+            });
+        }
+
+        root.child(backdrop)
         .child(
             gpui::div()
                 .size_full()
