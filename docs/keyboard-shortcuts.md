@@ -68,7 +68,7 @@ These shortcuts work when the task table has focus:
 
 | Shortcut | Action |
 |----------|--------|
-| `Enter` | Open selected task (not yet wired to a details view) |
+| `Enter` | Open selected task details |
 | `←` | Collapse current project |
 | `→` | Expand current project |
 
@@ -169,6 +169,7 @@ These shortcuts work when the search input has focus:
 | Shortcut | Action |
 |----------|--------|
 | `Escape` | Blur input (return focus to table) |
+| `Enter` | Apply search (filters already update as you type) |
 | `Ctrl+L` | Focus next filter dropdown |
 | `Ctrl+H` | Focus previous filter dropdown |
 | `Ctrl+J` | Focus table headers |
@@ -209,7 +210,9 @@ These shortcuts work when viewing task details:
 | Shortcut | Action |
 |----------|--------|
 | `Escape` | Close modal |
-| `Ctrl+Enter` | Save changes and close (not yet wired) |
+| `j` / `↓` | Scroll down |
+| `k` / `↑` | Scroll up |
+| `Ctrl+Enter` | Close modal (same as Esc) |
 
 ## Search Input Editing
 
