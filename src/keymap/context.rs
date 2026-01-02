@@ -6,6 +6,8 @@ pub enum ContextId {
     SidebarProjects,
     SidebarTags,
     Modal,
+    ModalInput,
+    ModalDropdown,
     FilterBar,
     TextInput,
 }
@@ -19,6 +21,8 @@ impl ContextId {
             "sidebarprojects" | "SidebarProjects" => Some(Self::SidebarProjects),
             "sidebartags" | "SidebarTags" => Some(Self::SidebarTags),
             "modal" | "Modal" => Some(Self::Modal),
+            "modalinput" | "ModalInput" => Some(Self::ModalInput),
+            "modaldropdown" | "ModalDropdown" => Some(Self::ModalDropdown),
             "filterbar" | "FilterBar" => Some(Self::FilterBar),
             "textinput" | "TextInput" => Some(Self::TextInput),
             _ => None,
@@ -33,6 +37,8 @@ impl ContextId {
             Self::SidebarProjects => "SidebarProjects",
             Self::SidebarTags => "SidebarTags",
             Self::Modal => "Modal",
+            Self::ModalInput => "ModalInput",
+            Self::ModalDropdown => "ModalDropdown",
             Self::FilterBar => "FilterBar",
             Self::TextInput => "TextInput",
         }

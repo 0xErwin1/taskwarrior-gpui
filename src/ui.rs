@@ -180,3 +180,17 @@ pub fn mix_color(base: Color, tint: Color, amount: f32) -> Color {
         a: 1.0,
     }
 }
+
+pub fn focus_wrap(child: impl IntoElement, focused: bool, theme: &Theme) -> gpui::Div {
+    let border_color = if focused {
+        theme.focus_ring
+    } else {
+        gpui::rgba(0x00000000)
+    };
+
+    gpui::div()
+        .border_2()
+        .border_color(border_color)
+        .rounded_md()
+        .child(child)
+}

@@ -1,7 +1,8 @@
 mod suggestion;
 
-use crate::theme::ActiveTheme;
+use crate::theme::{ActiveTheme, Theme};
 use gpui::prelude::*;
+use gpui::{Corner, anchored, deferred, px, point};
 use std::sync::Arc;
 
 pub use suggestion::Suggestion;
@@ -13,14 +14,15 @@ pub struct Input {
     placeholder: gpui::SharedString,
 
     cursor_pos: usize,
+    multiline: bool,
 
     suggestions: Vec<Suggestion>,
     suggestions_open: bool,
     active_suggestion: usize,
-
     suggest: Option<Arc<dyn Fn(&str) -> Vec<Suggestion> + Send + Sync>>,
     on_change: Option<Arc<dyn Fn(&str, &mut gpui::Context<Self>) + Send + Sync>>,
     on_submit: Option<Arc<dyn Fn(&str, &mut gpui::Context<Self>) + Send + Sync>>,
+    external_suggestions: bool,
 }
 
 impl Input {
@@ -36,15 +38,21 @@ impl Input {
             placeholder: placeholder.into(),
 
             cursor_pos: 0,
+            multiline: false,
 
             suggestions: vec![],
             suggestions_open: false,
             active_suggestion: 0,
-
             suggest: None,
             on_change: None,
             on_submit: None,
+            external_suggestions: false,
         }
+    }
+
+    pub fn external_suggestions(mut self) -> Self {
+        self.external_suggestions = true;
+        self
     }
 
     pub fn with_suggest(mut self, f: Arc<dyn Fn(&str) -> Vec<Suggestion> + Send + Sync>) -> Self {
@@ -60,6 +68,11 @@ impl Input {
         self
     }
 
+    pub fn multiline(mut self) -> Self {
+        self.multiline = true;
+        self
+    }
+
     pub fn with_on_submit(
         mut self,
         f: Arc<dyn Fn(&str, &mut gpui::Context<Self>) + Send + Sync>,
@@ -72,6 +85,14 @@ impl Input {
         &self.value
     }
 
+    pub fn element_id(&self) -> &gpui::ElementId {
+        &self.id
+    }
+
+    pub fn has_suggestions_open(&self) -> bool {
+        self.suggestions_open
+    }
+
     pub fn set_value(&mut self, value: impl Into<String>, cx: &mut gpui::Context<Self>) {
         self.value = value.into();
         self.cursor_pos = self.value.len();
@@ -79,8 +100,16 @@ impl Input {
         cx.notify();
     }
 
+    pub fn set_value_silent(&mut self, value: impl Into<String>, cx: &mut gpui::Context<Self>) {
+        self.value = value.into();
+        self.cursor_pos = self.value.len();
+        self.suggestions_open = false;
+        self.suggestions.clear();
+        cx.notify();
+    }
+
     pub fn clear(&mut self, cx: &mut gpui::Context<Self>) {
-        self.set_value("", cx);
+        self.set_value_silent("", cx);
     }
 
     pub fn focus(&self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
@@ -163,7 +192,7 @@ impl Input {
         if let Some(suggest) = &self.suggest {
             self.suggestions = suggest(&self.value);
             self.active_suggestion = 0;
-            self.suggestions_open = !self.suggestions.is_empty();
+            self.suggestions_open = !self.suggestions.is_empty() && !self.value.is_empty();
             cx.notify();
         }
     }
@@ -295,6 +324,24 @@ impl Input {
         cx.notify();
     }
 
+    fn cursor_line_info(&self) -> (usize, usize) {
+        let mut line = 0;
+        let mut line_start = 0;
+
+        for (idx, ch) in self.value.char_indices() {
+            if idx >= self.cursor_pos {
+                break;
+            }
+
+            if ch == '\n' {
+                line += 1;
+                line_start = idx + ch.len_utf8();
+            }
+        }
+
+        (line, self.cursor_pos.saturating_sub(line_start))
+    }
+
     fn handle_key_down(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -311,6 +358,11 @@ impl Input {
 
         match key {
             "enter" => {
+                if self.multiline && shift {
+                    self.insert_text("\n", cx);
+                    return;
+                }
+
                 if self.suggestions_open {
                     self.accept_suggestion(cx);
                 } else {
@@ -429,8 +481,52 @@ impl Input {
         }
     }
 
-    fn render_suggestions(&self, cx: &gpui::Context<Self>) -> impl IntoElement {
+    pub fn render_suggestions_external(&self, cx: &gpui::Context<Self>) -> Option<gpui::AnyElement> {
         if !self.suggestions_open {
+            return None;
+        }
+
+        let theme = cx.theme();
+        let items: Vec<gpui::AnyElement> = self
+            .suggestions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let is_active = i == self.active_suggestion;
+                gpui::div()
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(move |this, _e, _w, cx| {
+                            this.click_suggestion(i, cx);
+                        }),
+                    )
+                    .cursor_pointer()
+                    .px_2()
+                    .py_1()
+                    .when(is_active, |el| el.bg(theme.selection))
+                    .text_color(if is_active {
+                        theme.selection_foreground
+                    } else {
+                        theme.foreground
+                    })
+                    .child(s.label.clone())
+                    .into_any_element()
+            })
+            .collect();
+
+        Some(gpui::div()
+            .mt_1()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.panel)
+            .rounded_md()
+            .overflow_hidden()
+            .children(items)
+            .into_any_element())
+    }
+
+    fn render_suggestions(&self, cx: &gpui::Context<Self>) -> impl IntoElement {
+        if !self.suggestions_open || self.external_suggestions {
             return gpui::div().into_any_element();
         }
 
@@ -462,18 +558,84 @@ impl Input {
             })
             .collect();
 
-        gpui::div()
-            .absolute()
-            .top_full()
-            .left_0()
-            .right_0()
-            .mt_1()
+        let menu = gpui::div()
+            .w_full()
             .border_1()
             .border_color(theme.border)
             .bg(theme.panel)
             .rounded_md()
             .overflow_hidden()
-            .children(items)
+            .shadow_lg()
+            .occlude()
+            .children(items);
+
+        deferred(
+            anchored()
+                .anchor(Corner::TopLeft)
+                .offset(point(px(0.0), px(4.0)))
+                .snap_to_window()
+                .child(menu),
+        )
+        .with_priority(1)
+        .into_any_element()
+    }
+
+    fn render_multiline_content(&self, is_focused: bool, theme: &Theme) -> gpui::AnyElement {
+        if self.value.is_empty() {
+            let cursor = if is_focused {
+                gpui::div().w_px().h_4().bg(theme.accent).into_any_element()
+            } else {
+                gpui::div().into_any_element()
+            };
+
+            return gpui::div()
+                .id(self.id.clone())
+                .flex()
+                .flex_col()
+                .items_start()
+                .child(
+                    gpui::div().flex().items_center().child(cursor).child(
+                        gpui::div()
+                            .text_color(theme.muted)
+                            .child(self.placeholder.clone()),
+                    ),
+                )
+                .into_any_element();
+        }
+
+        let (cursor_line, cursor_col) = self.cursor_line_info();
+        let lines: Vec<&str> = self.value.split('\n').collect();
+        let mut rows = Vec::with_capacity(lines.len());
+
+        for (idx, line) in lines.iter().enumerate() {
+            if is_focused && idx == cursor_line {
+                let col = cursor_col.min(line.len());
+                let (before, after) = line.split_at(col);
+                let after_text = if after.is_empty() { " " } else { after };
+
+                rows.push(
+                    gpui::div()
+                        .flex()
+                        .items_center()
+                        .child(before.to_string())
+                        .child(gpui::div().w_px().h_4().bg(theme.accent))
+                        .child(after_text.to_string())
+                        .into_any_element(),
+                );
+            } else {
+                let text = if line.is_empty() { " " } else { line };
+                rows.push(gpui::div().child(text.to_string()).into_any_element());
+            }
+        }
+
+        gpui::div()
+            .id(self.id.clone())
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap_1()
+            .text_color(theme.foreground)
+            .children(rows)
             .into_any_element()
     }
 }
@@ -487,9 +649,9 @@ impl gpui::Render for Input {
         let theme = cx.theme();
         let is_focused = self.focus.is_focused(window);
 
-        let show_placeholder = self.value.is_empty();
-
-        let content = if show_placeholder {
+        let content = if self.multiline {
+            self.render_multiline_content(is_focused, theme)
+        } else if self.value.is_empty() {
             let cursor = if is_focused {
                 gpui::div().w_px().h_4().bg(theme.accent).into_any_element()
             } else {
@@ -554,6 +716,7 @@ impl gpui::Render for Input {
             })
             .relative()
             .min_w(gpui::rems(12.))
+            .when(self.multiline, |el| el.min_h(gpui::rems(4.0)))
             .border_1()
             .border_color(if is_focused {
                 theme.accent

@@ -6,7 +6,11 @@ use crate::{
 impl App {
     fn close_task_detail(&mut self, cx: &mut gpui::Context<Self>) {
         self.task_detail_modal.update(cx, |modal, cx| {
-            modal.close(cx);
+            if modal.is_editing() {
+                modal.cancel_edit(cx);
+            } else {
+                modal.close(cx);
+            }
         });
     }
 

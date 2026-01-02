@@ -429,5 +429,77 @@ pub fn build_default_keymap() -> KeymapLayer {
         Command::SaveModal,
     );
 
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Escape, Mods::none()),
+        Command::CloseModal,
+    );
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Enter, Mods::ctrl()),
+        Command::SaveModal,
+    );
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Tab, Mods::none()),
+        Command::FocusFilterNext,
+    );
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Tab, Mods::shift()),
+        Command::FocusFilterPrev,
+    );
+
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Escape, Mods::none()),
+        Command::CloseModal,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Enter, Mods::ctrl()),
+        Command::SaveModal,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Enter, Mods::none()),
+        Command::ToggleDropdown,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Space, Mods::none()),
+        Command::ToggleDropdown,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Char('j'), Mods::none()),
+        Command::SelectNextOption,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Char('k'), Mods::none()),
+        Command::SelectPrevOption,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::ArrowDown, Mods::none()),
+        Command::SelectNextOption,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::ArrowUp, Mods::none()),
+        Command::SelectPrevOption,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Tab, Mods::none()),
+        Command::FocusFilterNext,
+    );
+    layer.bind(
+        ContextId::ModalDropdown,
+        KeyChord::new(Key::Tab, Mods::shift()),
+        Command::FocusFilterPrev,
+    );
+
     layer
 }

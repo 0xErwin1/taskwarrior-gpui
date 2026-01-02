@@ -72,6 +72,15 @@ pub fn render_app_layout(
         .child(sidebar)
         .child(main);
 
+    let main = gpui::div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_h_0()
+        .gap(SECTION_GAP)
+        .child(content)
+        .child(status_bar);
+
     let mut root = gpui::div()
         .flex()
         .flex_col()
@@ -79,11 +88,9 @@ pub fn render_app_layout(
         .relative()
         .bg(theme.background)
         .p(ROOT_PADDING)
-        .gap(SECTION_GAP)
         .track_focus(focus_handle)
         .on_key_down(on_root_key_down)
-        .child(content)
-        .child(status_bar);
+        .child(main);
 
     if let Some(modal) = modal {
         root = root.child(modal);

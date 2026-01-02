@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gpui::prelude::*;
+use gpui::{Corner, anchored, deferred, px, point};
 
 use crate::components::button::Button;
 use crate::components::label::Label;
@@ -41,6 +42,7 @@ pub struct Dropdown {
     selected_index: Option<usize>,
     disabled: bool,
     loading: bool,
+    inline_menu: bool,
     placeholder: gpui::SharedString,
     label_prefix: Option<gpui::SharedString>,
     on_select: Option<Arc<dyn Fn(usize, &DropdownItem, &mut gpui::Context<Self>) + Send + Sync>>,
@@ -56,7 +58,8 @@ impl Dropdown {
             selected_index: None,
             disabled: false,
             loading: false,
-            placeholder: "Seleccionar".into(),
+            inline_menu: false,
+            placeholder: "Select".into(),
             label_prefix: None,
             on_select: None,
         }
@@ -114,6 +117,11 @@ impl Dropdown {
 
     pub fn loading(mut self, loading: bool) -> Self {
         self.loading = loading;
+        self
+    }
+
+    pub fn inline_menu(mut self) -> Self {
+        self.inline_menu = true;
         self
     }
 
@@ -279,14 +287,8 @@ impl Dropdown {
             })
             .collect();
 
-        gpui::div()
-            .absolute()
-            .top_full()
-            .left_0()
-            .min_w(gpui::rems(12.0))
-            .min_w_full()
-            .mt_1()
-            .occlude()
+        let menu = gpui::div()
+            .w_full()  // Same width as trigger
             .p_1()
             .border_1()
             .border_color(theme.border)
@@ -294,8 +296,22 @@ impl Dropdown {
             .rounded_md()
             .overflow_hidden()
             .shadow_lg()
-            .children(items)
+            .occlude()
+            .children(items);
+
+        if self.inline_menu {
+            menu.into_any_element()
+        } else {
+            deferred(
+                anchored()
+                    .anchor(Corner::TopLeft)
+                    .offset(point(px(0.0), px(4.0)))
+                    .snap_to_window()
+                    .child(menu),
+            )
+            .with_priority(1)
             .into_any_element()
+        }
     }
 }
 
@@ -352,7 +368,6 @@ impl gpui::Render for Dropdown {
 
         let mut container = gpui::div()
             .id(self.id.clone())
-            .relative()
             .flex()
             .flex_col()
             .child(trigger_wrap)

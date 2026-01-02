@@ -67,13 +67,13 @@ impl gpui::RenderOnce for ModalFrame {
             .left_0();
 
         if let Some(handler) = self.on_close {
-            backdrop = backdrop.on_mouse_down(gpui::MouseButton::Left, move |event, window, app| {
-                (handler)(event, window, app);
-            });
+            backdrop =
+                backdrop.on_mouse_down(gpui::MouseButton::Left, move |event, window, app| {
+                    (handler)(event, window, app);
+                });
         }
 
-        root.child(backdrop)
-        .child(
+        root.child(backdrop).child(
             gpui::div()
                 .size_full()
                 .absolute()

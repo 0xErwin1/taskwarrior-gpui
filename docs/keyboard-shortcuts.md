@@ -209,10 +209,10 @@ These shortcuts work when viewing task details:
 
 | Shortcut | Action |
 |----------|--------|
-| `Escape` | Close modal |
+| `Escape` | Cancel edit (when editing) or close modal |
 | `j` / `↓` | Scroll down |
 | `k` / `↑` | Scroll up |
-| `Ctrl+Enter` | Close modal (same as Esc) |
+| `Ctrl+Enter` | Save edits (when editing) or close modal |
 
 ## Search Input Editing
 

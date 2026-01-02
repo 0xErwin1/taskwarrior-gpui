@@ -12,7 +12,7 @@ use crate::{
     },
     keymap::{Command, CommandDispatcher},
     models::{DueFilter, FilterState, PriorityFilter, StatusFilter},
-    task::{self, TaskFilter, TaskService, TaskSummary},
+    task::{self, TaskFilter},
     theme::{self, ActiveTheme},
     ui::{
         DATE_FORMAT, TABLE_FILTER_BAR_INITIAL_HEIGHT, TABLE_MAX_DESCRIPTION_LENGTH, priority_badge,
@@ -139,10 +139,6 @@ impl PaginationState {
 
     pub fn total_items(&mut self, total_items: usize) {
         self.total_items = total_items;
-    }
-
-    pub fn page_size(&mut self, page_size: usize) {
-        self.page_size = page_size;
     }
 
     pub fn current_page(&mut self, current_page: usize) {

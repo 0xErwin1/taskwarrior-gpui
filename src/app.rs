@@ -4,14 +4,14 @@ use gpui::prelude::*;
 
 use crate::{
     components::toast::{ToastGlobal, ToastHost},
-    keymap::{Command, CommandDispatcher, ContextId, FocusTarget, KeyChord, KeymapStack},
+    keymap::{FocusTarget, KeymapStack},
     models::{FilterState, ProjectTree},
     task::{self, TaskOverview, TaskService, TaskSummary},
     theme::ActiveTheme,
     view::{
         app_layout,
         sidebar::{Sidebar, SidebarEvent, SidebarSection, TagItem},
-        status_bar::{StatusBar, StatusBarEvent, SyncState},
+        status_bar::{StatusBar, StatusBarEvent},
         task_detail_modal::{TaskDetailModal, TaskDetailModalEvent},
         task_table::{TaskTable, TaskTableEvent},
     },
@@ -115,7 +115,7 @@ impl App {
         (projects, tag_items)
     }
 
-    fn update_ui_from_tasks(
+    pub(super) fn update_ui_from_tasks(
         &mut self,
         all_tasks: Vec<task::TaskSummary>,
         cx: &mut gpui::Context<Self>,
@@ -134,6 +134,23 @@ impl App {
         let tasks = self.tasks.clone();
         self.task_table
             .update(cx, |table, cx| table.reload_tasks_from_all(tasks, cx));
+
+        self.update_modal_project_suggestions(cx);
+    }
+
+    fn update_modal_project_suggestions(&self, cx: &mut gpui::Context<Self>) {
+        let mut projects: Vec<String> = self
+            .tasks
+            .iter()
+            .filter_map(|task| task.project.clone())
+            .collect();
+
+        projects.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        projects.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+
+        self.task_detail_modal.update(cx, |modal, cx| {
+            modal.set_project_suggestions(projects, cx);
+        });
     }
 
     fn reload_tasks(&mut self, cx: &mut gpui::Context<Self>) {
@@ -153,182 +170,6 @@ impl App {
                 self.update_ui_from_tasks(vec![], cx);
             }
         }
-    }
-
-    pub(super) fn handle_sync(&mut self, cx: &mut gpui::Context<Self>) {
-        self.status_bar.update(cx, |bar, cx| {
-            bar.set_sync_state(SyncState::Syncing, cx);
-            bar.set_last_sync_message("Syncing...".to_string(), cx);
-        });
-
-        match self.task_service.get_all_tasks() {
-            Ok(all_tasks) => {
-                let summaries: Vec<TaskSummary> = all_tasks.iter().map(TaskSummary::from).collect();
-                self.update_ui_from_tasks(summaries, cx);
-
-                self.status_bar.update(cx, |bar, cx| {
-                    bar.set_sync_state(SyncState::Success, cx);
-                    bar.set_last_sync_message("Synced".to_string(), cx);
-                });
-            }
-            Err(e) => {
-                log::error!("[App] Sync failed: {}", e);
-                self.status_bar.update(cx, |bar, cx| {
-                    bar.set_sync_state(SyncState::Error, cx);
-                    bar.set_last_sync_message(format!("Error: {}", e), cx);
-                });
-            }
-        }
-    }
-
-    fn handle_key_down(
-        &mut self,
-        event: &gpui::KeyDownEvent,
-        window: &mut gpui::Window,
-        cx: &mut gpui::Context<Self>,
-    ) {
-        if let Some(chord) = KeyChord::from_gpui(event) {
-            let context = self.active_context(cx);
-
-            if let Some(command) = self.keymap.resolve(context, &chord) {
-                let modal_is_open = self.task_detail_modal.read(cx).is_open();
-
-                if modal_is_open {
-                    match command {
-                        Command::CloseModal
-                        | Command::SaveModal
-                        | Command::Sync
-                        | Command::ModalScrollUp
-                        | Command::ModalScrollDown => {}
-                        _ => return,
-                    }
-                }
-
-                match command {
-                    Command::FocusSearch => {
-                        let from_headers = matches!(self.focus_target, FocusTarget::TableHeaders);
-                        self.focus_target = FocusTarget::Table;
-                        self.task_table.update(cx, |table, cx| {
-                            if from_headers {
-                                table.blur_table_headers(cx);
-                            }
-                            table.focus_search_input(window, cx);
-                        });
-                        cx.notify();
-                    }
-                    Command::FocusTableHeaders => {
-                        self.focus_target = FocusTarget::TableHeaders;
-                        self.task_table.update(cx, |table, cx| {
-                            table.blur_search_input(window, cx);
-                            table.set_filter_bar_focus(
-                                crate::view::task_table::FilterBarFocus::None,
-                                cx,
-                            );
-                            table.focus_table_headers(window, cx);
-                        });
-                        cx.notify();
-                    }
-                    Command::FocusTable => {
-                        self.focus_target = FocusTarget::Table;
-                        self.task_table.update(cx, |table, cx| match context {
-                            ContextId::TextInput | ContextId::FilterBar => {
-                                table.blur_search_input(window, cx);
-                                table.set_filter_bar_focus(
-                                    crate::view::task_table::FilterBarFocus::None,
-                                    cx,
-                                );
-                            }
-                            ContextId::TableHeaders => {
-                                table.blur_table_headers(cx);
-                            }
-                            _ => {}
-                        });
-                        cx.notify();
-                    }
-                    Command::FocusFilterNext | Command::FocusFilterPrev => {
-                        self.task_table.update(cx, |table, cx| {
-                            use crate::view::task_table::FilterBarFocus;
-                            let was_on_input =
-                                matches!(table.get_filter_bar_focus(), FilterBarFocus::SearchInput);
-
-                            if command == Command::FocusFilterNext {
-                                table.focus_filter_next(cx);
-                            } else {
-                                table.focus_filter_prev(cx);
-                            }
-
-                            if was_on_input {
-                                table.blur_search_input(window, cx);
-                            }
-
-                            let now_on_input =
-                                matches!(table.get_filter_bar_focus(), FilterBarFocus::SearchInput);
-                            if now_on_input && !was_on_input {
-                                table.focus_search_input(window, cx);
-                            }
-                        });
-                    }
-                    _ => {
-                        self.dispatch(command, cx);
-                    }
-                }
-            }
-        }
-    }
-
-    pub(super) fn open_selected_task(
-        &mut self,
-        window: Option<&mut gpui::Window>,
-        cx: &mut gpui::Context<Self>,
-    ) {
-        if self.task_detail_modal.read(cx).is_open() {
-            return;
-        }
-
-        let task_id = self.task_table.read(cx).selected_task_uuid();
-        let Some(task_id) = task_id else {
-            return;
-        };
-
-        self.open_task_detail(task_id, window, cx);
-    }
-
-    fn open_task_detail(
-        &mut self,
-        task_id: uuid::Uuid,
-        window: Option<&mut gpui::Window>,
-        cx: &mut gpui::Context<Self>,
-    ) {
-        self.focus_before_modal = self.focus_target;
-
-        let tasks = self.tasks.clone();
-        match self.task_service.get_task_detail(task_id, &tasks) {
-            Ok(detail) => {
-                self.task_detail_modal.update(cx, |modal, cx| {
-                    modal.open_with_detail(detail, window, cx);
-                });
-            }
-            Err(e) => {
-                self.task_detail_modal.update(cx, |modal, cx| {
-                    modal.open_with_error(task_id, e.to_string(), window, cx);
-                });
-            }
-        }
-
-        cx.notify();
-    }
-
-    fn active_context(&self, cx: &gpui::Context<Self>) -> ContextId {
-        if self.task_detail_modal.read(cx).is_open() {
-            return ContextId::Modal;
-        }
-        if matches!(self.focus_target, FocusTarget::Table) {
-            let filter_context = self.task_table.read(cx).get_active_filter_context();
-            if let Some(context) = filter_context {
-                return context;
-            }
-        }
-        self.focus_target.to_context()
     }
 
     pub fn run() -> () {
@@ -390,6 +231,15 @@ impl App {
                         task_table.update(cx, |table, cx| {
                             table.reload_tasks_from_all(task_summaries.clone(), cx);
                         });
+                        let mut project_suggestions: Vec<String> = task_summaries
+                            .iter()
+                            .filter_map(|task| task.project.clone())
+                            .collect();
+                        project_suggestions.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+                        project_suggestions.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+                        task_detail_modal.update(cx, |modal, cx| {
+                            modal.set_project_suggestions(project_suggestions, cx);
+                        });
 
                         let mut keymap = KeymapStack::new();
                         keymap.push_layer(crate::keymap::defaults::build_default_keymap());
@@ -447,6 +297,9 @@ impl App {
                             TaskDetailModalEvent::Closed => {
                                 app.focus_target = app.focus_before_modal;
                                 cx.notify();
+                            }
+                            TaskDetailModalEvent::SaveEdits { task_id, update } => {
+                                app.handle_save_task_edits(*task_id, update.clone(), cx);
                             }
                         })
                         .detach();

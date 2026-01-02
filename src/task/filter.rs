@@ -155,8 +155,14 @@ impl TaskFilter {
                 None => return false,
                 Some(task_project) => {
                     if self.project_include_children {
-                        if !task_project.starts_with(project) {
-                            return false;
+                        // Match exact project or children (separated by '.')
+                        // e.g., "gpui.task" should NOT match "gpui.task-warrior"
+                        // but SHOULD match "gpui.task" and "gpui.task.subtask"
+                        if task_project != project {
+                            let prefix_with_dot = format!("{}.", project);
+                            if !task_project.starts_with(&prefix_with_dot) {
+                                return false;
+                            }
                         }
                     } else if task_project != project {
                         return false;

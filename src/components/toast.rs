@@ -82,9 +82,9 @@ impl gpui::Render for ToastHost {
                 .flex()
                 .items_center()
                 .justify_center()
-                .w(gpui::rems(1.5))
-                .h(gpui::rems(1.5))
-                .text_sm()
+                .w(gpui::rems(1.75))
+                .h(gpui::rems(1.75))
+                .text_xs()
                 .text_color(theme.muted)
                 .cursor_pointer()
                 .hover(|s| s.text_color(theme.accent))
@@ -94,17 +94,17 @@ impl gpui::Render for ToastHost {
                         host.dismiss(toast_id, cx);
                     }),
                 )
-                .child(Label::new("X"));
+                .child(Label::new("×"));
 
-            let background = mix_color(theme.background, accent, 0.2);
-            let border = Theme::alpha(accent, 0.45);
+            let background = mix_color(theme.raised, accent, 0.28);
+            let border = Theme::alpha(accent, 0.5);
 
             gpui::div()
                 .flex()
                 .items_center()
                 .gap_3()
-                .px_5()
-                .py_3()
+                .px(gpui::rems(1.25))
+                .py(gpui::rems(0.75))
                 .occlude()
                 .border_1()
                 .border_color(border)
@@ -113,13 +113,13 @@ impl gpui::Render for ToastHost {
                 .shadow_lg()
                 .child(
                     gpui::div()
-                        .w(gpui::px(6.0))
+                        .w(gpui::px(8.0))
                         .h_full()
-                        .bg(Theme::alpha(accent, 0.9))
+                        .bg(Theme::alpha(accent, 0.85))
                         .rounded_md(),
                 )
                 .child(
-                    gpui::div().flex_1().min_w(gpui::rems(18.0)).child(
+                    gpui::div().flex_1().min_w(gpui::rems(22.0)).child(
                         Label::new(toast.message.clone())
                             .text_sm()
                             .text_color(theme.foreground)
@@ -135,6 +135,7 @@ impl gpui::Render for ToastHost {
             .absolute()
             .top(gpui::rems(1.0))
             .right(gpui::rems(1.0))
+            .occlude()
             .flex()
             .flex_col()
             .gap_2()
