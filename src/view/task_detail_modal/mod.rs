@@ -262,14 +262,17 @@ impl TaskDetailModal {
                 Dropdown::new("task-edit-status")
                     .items(status_items)
                     .on_select(Arc::new(move |index, _item, cx| {
-                        cx.update_entity(&modal_entity, |modal, cx| {
-                            modal.state.form.status = match index {
-                                0 => task::TaskStatus::Pending,
-                                1 => task::TaskStatus::Completed,
-                                2 => task::TaskStatus::Deleted,
-                                _ => task::TaskStatus::Pending,
-                            };
-                            cx.notify();
+                        let modal_entity = modal_entity.clone();
+                        cx.defer(move |cx| {
+                            let _ = modal_entity.update(cx, |modal, cx| {
+                                modal.state.form.status = match index {
+                                    0 => task::TaskStatus::Pending,
+                                    1 => task::TaskStatus::Completed,
+                                    2 => task::TaskStatus::Deleted,
+                                    _ => task::TaskStatus::Pending,
+                                };
+                                cx.notify();
+                            });
                         });
                     }))
             })
@@ -287,15 +290,18 @@ impl TaskDetailModal {
                 Dropdown::new("task-edit-priority")
                     .items(priority_items)
                     .on_select(Arc::new(move |index, _item, cx| {
-                        cx.update_entity(&modal_entity, |modal, cx| {
-                            modal.state.form.priority = match index {
-                                0 => task::TaskPriority::High,
-                                1 => task::TaskPriority::Medium,
-                                2 => task::TaskPriority::Low,
-                                3 => task::TaskPriority::None,
-                                _ => task::TaskPriority::None,
-                            };
-                            cx.notify();
+                        let modal_entity = modal_entity.clone();
+                        cx.defer(move |cx| {
+                            let _ = modal_entity.update(cx, |modal, cx| {
+                                modal.state.form.priority = match index {
+                                    0 => task::TaskPriority::High,
+                                    1 => task::TaskPriority::Medium,
+                                    2 => task::TaskPriority::Low,
+                                    3 => task::TaskPriority::None,
+                                    _ => task::TaskPriority::None,
+                                };
+                                cx.notify();
+                            });
                         });
                     }))
             })
