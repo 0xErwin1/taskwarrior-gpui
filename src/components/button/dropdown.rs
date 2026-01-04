@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use gpui::prelude::*;
-use gpui::{Corner, anchored, deferred, px, point};
+use gpui::{Corner, anchored, deferred, point, px};
 
 use crate::components::button::Button;
 use crate::components::label::Label;
@@ -288,7 +288,7 @@ impl Dropdown {
             .collect();
 
         let menu = gpui::div()
-            .w_full()  // Same width as trigger
+            .w_full() // Same width as trigger
             .p_1()
             .border_1()
             .border_color(theme.border)

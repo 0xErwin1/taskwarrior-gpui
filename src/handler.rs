@@ -138,6 +138,23 @@ impl App {
         window: Option<&mut gpui::Window>,
         cx: &mut gpui::Context<Self>,
     ) {
+        self.open_selected_task_mode(false, window, cx);
+    }
+
+    pub(super) fn open_selected_task_edit(
+        &mut self,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        self.open_selected_task_mode(true, window, cx);
+    }
+
+    fn open_selected_task_mode(
+        &mut self,
+        edit_mode: bool,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
         if self.task_detail_modal.read(cx).is_open() {
             return;
         }
@@ -147,12 +164,13 @@ impl App {
             return;
         };
 
-        self.open_task_detail(task_id, window, cx);
+        self.open_task_detail(task_id, edit_mode, window, cx);
     }
 
     pub(super) fn open_task_detail(
         &mut self,
         task_id: uuid::Uuid,
+        edit_mode: bool,
         window: Option<&mut gpui::Window>,
         cx: &mut gpui::Context<Self>,
     ) {
@@ -162,7 +180,11 @@ impl App {
         match self.task_service.get_task_detail(task_id, &tasks) {
             Ok(detail) => {
                 self.task_detail_modal.update(cx, |modal, cx| {
-                    modal.open_with_detail(detail, window, cx);
+                    if edit_mode {
+                        modal.open_with_detail_edit(detail, window, cx);
+                    } else {
+                        modal.open_with_detail(detail, window, cx);
+                    }
                 });
             }
             Err(e) => {
@@ -337,7 +359,7 @@ impl App {
             self.apply_task_update(task, cx);
         } else {
             self.task_detail_modal.update(cx, |modal, cx| {
-                modal.cancel_edit(cx);
+                modal.cancel_edit(None, cx);
             });
         }
     }

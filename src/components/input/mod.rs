@@ -2,7 +2,7 @@ mod suggestion;
 
 use crate::theme::{ActiveTheme, Theme};
 use gpui::prelude::*;
-use gpui::{Corner, anchored, deferred, px, point};
+use gpui::{Corner, anchored, deferred, point, px};
 use std::sync::Arc;
 
 pub use suggestion::Suggestion;
@@ -348,6 +348,9 @@ impl Input {
         _window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) {
+        // Note: This handler is only attached when the input has real focus
+        // (see render() method), so we don't need to check is_focused here anymore
+
         let key = event.keystroke.key.as_str();
         let ctrl = event.keystroke.modifiers.control;
         let shift = event.keystroke.modifiers.shift;
@@ -358,11 +361,13 @@ impl Input {
 
         match key {
             "enter" => {
-                if self.multiline && shift {
+                // For multiline, Enter inserts newline (modal handles exit via commands)
+                if self.multiline {
                     self.insert_text("\n", cx);
                     return;
                 }
 
+                // For single-line, check suggestions then submit
                 if self.suggestions_open {
                     self.accept_suggestion(cx);
                 } else {
@@ -481,7 +486,10 @@ impl Input {
         }
     }
 
-    pub fn render_suggestions_external(&self, cx: &gpui::Context<Self>) -> Option<gpui::AnyElement> {
+    pub fn render_suggestions_external(
+        &self,
+        cx: &gpui::Context<Self>,
+    ) -> Option<gpui::AnyElement> {
         if !self.suggestions_open {
             return None;
         }
@@ -514,15 +522,17 @@ impl Input {
             })
             .collect();
 
-        Some(gpui::div()
-            .mt_1()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.panel)
-            .rounded_md()
-            .overflow_hidden()
-            .children(items)
-            .into_any_element())
+        Some(
+            gpui::div()
+                .mt_1()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.panel)
+                .rounded_md()
+                .overflow_hidden()
+                .children(items)
+                .into_any_element(),
+        )
     }
 
     fn render_suggestions(&self, cx: &gpui::Context<Self>) -> impl IntoElement {
@@ -706,11 +716,10 @@ impl gpui::Render for Input {
 
         let focus_handle = self.focus.clone();
 
-        gpui::div()
+        let base = gpui::div()
             .id(self.id.clone())
             .key_context("Input")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(Self::handle_key_down))
             .on_mouse_down(gpui::MouseButton::Left, move |_ev, window, _cx| {
                 window.focus(&focus_handle);
             })
@@ -728,7 +737,16 @@ impl gpui::Render for Input {
             .p_2()
             .cursor(gpui::CursorStyle::IBeam)
             .child(content)
-            .child(self.render_suggestions(cx))
+            .child(self.render_suggestions(cx));
+
+        // Only attach key handler when this input actually has focus
+        // This prevents the input from intercepting keyboard events
+        // when it only has "visual focus" (focus ring) but not real focus
+        if is_focused {
+            base.on_key_down(cx.listener(Self::handle_key_down))
+        } else {
+            base
+        }
     }
 }
 

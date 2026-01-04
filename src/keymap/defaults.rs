@@ -133,6 +133,11 @@ pub fn build_default_keymap() -> KeymapLayer {
     );
     layer.bind(
         ContextId::Table,
+        KeyChord::new(Key::Char('e'), Mods::none()),
+        Command::OpenTaskEdit,
+    );
+    layer.bind(
+        ContextId::Table,
         KeyChord::new(Key::ArrowLeft, Mods::none()),
         Command::CollapseProject,
     );
@@ -397,7 +402,7 @@ pub fn build_default_keymap() -> KeymapLayer {
         Command::BlurInput,
     );
 
-    // Modal
+    // Modal (View mode)
     layer.bind(
         ContextId::Modal,
         KeyChord::new(Key::Escape, Mods::none()),
@@ -428,36 +433,137 @@ pub fn build_default_keymap() -> KeymapLayer {
         KeyChord::new(Key::Enter, Mods::ctrl()),
         Command::SaveModal,
     );
-
+    // Enter edit mode with 'e'
     layer.bind(
-        ContextId::ModalInput,
+        ContextId::Modal,
+        KeyChord::new(Key::Char('e'), Mods::none()),
+        Command::EnterEditMode,
+    );
+
+    // ModalEditNav - Edit mode, navigating between fields (not typing)
+    layer.bind(
+        ContextId::ModalEditNav,
         KeyChord::new(Key::Escape, Mods::none()),
         Command::CloseModal,
     );
     layer.bind(
-        ContextId::ModalInput,
-        KeyChord::new(Key::Enter, Mods::ctrl()),
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('s'), Mods::ctrl()),
         Command::SaveModal,
     );
     layer.bind(
-        ContextId::ModalInput,
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('j'), Mods::none()),
+        Command::ModalFocusNext,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('k'), Mods::none()),
+        Command::ModalFocusPrev,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::ArrowDown, Mods::none()),
+        Command::ModalFocusNext,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::ArrowUp, Mods::none()),
+        Command::ModalFocusPrev,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
         KeyChord::new(Key::Tab, Mods::none()),
-        Command::FocusFilterNext,
+        Command::ModalFocusNext,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Tab, Mods::shift()),
+        Command::ModalFocusPrev,
+    );
+    // Enter/Space - Edit selected item (if any), or enter field (fallback)
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Enter, Mods::none()),
+        Command::EditSelectedItem,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Space, Mods::none()),
+        Command::EditSelectedItem,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('u'), Mods::none()),
+        Command::Undo,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('r'), Mods::none()),
+        Command::Redo,
+    );
+    // h/l - Navigate items within tags
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('h'), Mods::none()),
+        Command::ModalItemPrev,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('l'), Mods::none()),
+        Command::ModalItemNext,
+    );
+    // Delete/Backspace - Delete selected item
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Delete, Mods::none()),
+        Command::DeleteSelectedItem,
+    );
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Backspace, Mods::none()),
+        Command::DeleteSelectedItem,
+    );
+    // y - Copy selected annotation OR confirm in delete dialog
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('y'), Mods::none()),
+        Command::ConfirmYes,
+    );
+    // n - Cancel delete dialog
+    layer.bind(
+        ContextId::ModalEditNav,
+        KeyChord::new(Key::Char('n'), Mods::none()),
+        Command::ConfirmNo,
+    );
+
+    // ModalInput - Edit mode, actively typing in an input
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Escape, Mods::none()),
+        Command::ExitEditField,
     );
     layer.bind(
         ContextId::ModalInput,
-        KeyChord::new(Key::Tab, Mods::shift()),
-        Command::FocusFilterPrev,
+        KeyChord::new(Key::Char('s'), Mods::ctrl()),
+        Command::SaveModal,
+    );
+    // Enter submits or exits field depending on field type
+    layer.bind(
+        ContextId::ModalInput,
+        KeyChord::new(Key::Enter, Mods::none()),
+        Command::SubmitOrExitField,
     );
 
+    // ModalDropdown - Edit mode, dropdown is open
     layer.bind(
         ContextId::ModalDropdown,
         KeyChord::new(Key::Escape, Mods::none()),
-        Command::CloseModal,
+        Command::ExitEditField,
     );
     layer.bind(
         ContextId::ModalDropdown,
-        KeyChord::new(Key::Enter, Mods::ctrl()),
+        KeyChord::new(Key::Char('s'), Mods::ctrl()),
         Command::SaveModal,
     );
     layer.bind(
@@ -489,16 +595,6 @@ pub fn build_default_keymap() -> KeymapLayer {
         ContextId::ModalDropdown,
         KeyChord::new(Key::ArrowUp, Mods::none()),
         Command::SelectPrevOption,
-    );
-    layer.bind(
-        ContextId::ModalDropdown,
-        KeyChord::new(Key::Tab, Mods::none()),
-        Command::FocusFilterNext,
-    );
-    layer.bind(
-        ContextId::ModalDropdown,
-        KeyChord::new(Key::Tab, Mods::shift()),
-        Command::FocusFilterPrev,
     );
 
     layer

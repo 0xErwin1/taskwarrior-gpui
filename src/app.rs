@@ -287,7 +287,7 @@ impl App {
                         cx.subscribe(&task_table_events, |app, _table, event, cx| match event {
                             TaskTableEvent::OpenTask(task_id) => {
                                 if !app.task_detail_modal.read(cx).is_open() {
-                                    app.open_task_detail(*task_id, None, cx);
+                                    app.open_task_detail(*task_id, false, None, cx);
                                 }
                             }
                         })

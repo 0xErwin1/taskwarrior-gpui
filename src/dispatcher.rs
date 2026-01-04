@@ -4,12 +4,16 @@ use crate::{
 };
 
 impl App {
-    fn close_task_detail(&mut self, cx: &mut gpui::Context<Self>) {
+    fn close_task_detail(
+        &mut self,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::Context<Self>,
+    ) {
         self.task_detail_modal.update(cx, |modal, cx| {
             if modal.is_editing() {
-                modal.cancel_edit(cx);
+                modal.cancel_edit(window, cx);
             } else {
-                modal.close(cx);
+                modal.close(window, cx);
             }
         });
     }
@@ -111,12 +115,26 @@ impl CommandDispatcher for App {
                 }
                 true
             }
+            Command::OpenTaskEdit => {
+                match self.focus_target {
+                    FocusTarget::SidebarProjects | FocusTarget::SidebarTags => {
+                        // For sidebar, just open in view mode (or ignore)
+                        self.sidebar.update(cx, |sidebar, cx| {
+                            sidebar.dispatch(Command::OpenSelectedTask, cx)
+                        });
+                    }
+                    _ => {
+                        self.open_selected_task_edit(None, cx);
+                    }
+                }
+                true
+            }
             Command::CloseModal => {
-                self.close_task_detail(cx);
+                self.close_task_detail(None, cx);
                 true
             }
             Command::SaveModal => {
-                self.close_task_detail(cx);
+                self.close_task_detail(None, cx);
                 true
             }
             Command::ModalScrollUp => {
