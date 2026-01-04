@@ -104,6 +104,7 @@ where
 pub(super) fn render_task_detail_panel<OnCloseClick>(
     detail: &task::TaskDetailVm,
     mode: ModalMode,
+    is_create: bool,
     edit_state: EditState,
     form: &TaskForm,
     errors: &HashMap<FieldId, gpui::SharedString>,
@@ -129,6 +130,7 @@ where
     OnCloseClick: Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 {
     let is_editing = mode == ModalMode::Edit;
+    let is_creating = is_create;
     let is_navigating = edit_state == EditState::Navigating;
     let status_label = if is_editing {
         form.status.clone().into()
@@ -204,7 +206,7 @@ where
         );
     }
 
-    if is_editing {
+    if is_editing && !is_creating {
         badges.push(
             Chip::new("Editing")
                 .variant(ChipVariant::Info)
@@ -224,7 +226,11 @@ where
     } else {
         detail.overview.description.clone()
     };
-    let title = format!("{} {}", id_label, title_description);
+    let title = if is_creating {
+        "New task".to_string()
+    } else {
+        format!("{} {}", id_label, title_description)
+    };
 
     let on_close_click = Arc::new(on_close_click);
     let header = render_header(title, badges, is_editing, theme, cx, on_close_click.clone());
@@ -303,6 +309,7 @@ where
     let footer = render_footer(
         detail,
         is_editing,
+        is_creating,
         is_navigating,
         errors,
         form,
@@ -1015,6 +1022,7 @@ fn render_extras_section(detail: &TaskDetailVm, value_color: gpui::Rgba) -> Opti
 fn render_footer(
     detail: &TaskDetailVm,
     is_editing: bool,
+    is_creating: bool,
     is_navigating: bool,
     errors: &HashMap<FieldId, gpui::SharedString>,
     form: &TaskForm,
@@ -1027,7 +1035,27 @@ fn render_footer(
 ) -> gpui::Div {
     let mut action_row = gpui::div().flex().items_center().gap_2();
 
-    if is_editing {
+    if is_creating {
+        let cancel_create_handler = Arc::new(cx.listener(|modal, _event, window, cx| {
+            modal.close(Some(window), cx);
+        }));
+
+        let create_handler = Arc::new(cx.listener(|modal, _event, _window, cx| {
+            modal.submit_create(cx);
+        }));
+
+        let cancel_button =
+            ActionButton::new("Cancel (Esc)").on_click(move |event, window, app| {
+                (cancel_create_handler)(event, window, app);
+            });
+
+        let create_button =
+            ActionButton::new("Create (Ctrl+S)").on_click(move |event, window, app| {
+                (create_handler)(event, window, app);
+            });
+
+        action_row = action_row.child(cancel_button).child(create_button);
+    } else if is_editing {
         let cancel_edit_handler = Arc::new(cx.listener(|modal, _event, window, cx| {
             modal.cancel_edit(Some(window), cx);
         }));

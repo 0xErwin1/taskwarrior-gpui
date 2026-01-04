@@ -163,6 +163,11 @@ impl CommandDispatcher for App {
                     .update(cx, |table, cx| table.dispatch(command, cx));
                 true
             }
+            Command::CreateTask | Command::DeleteSelectedTask => {
+                self.task_table
+                    .update(cx, |table, cx| table.dispatch(command, cx));
+                true
+            }
             Command::ToggleDropdown
             | Command::SelectNextOption
             | Command::SelectPrevOption

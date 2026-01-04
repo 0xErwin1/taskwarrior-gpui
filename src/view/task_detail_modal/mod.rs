@@ -1,5 +1,6 @@
-use chrono::Utc;
+use chrono::{NaiveDate, TimeZone, Utc};
 use gpui::prelude::*;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::components::button::{Dropdown, DropdownItem};
@@ -7,6 +8,7 @@ use crate::components::input::Input;
 use crate::components::toast::{ToastGlobal, ToastKind};
 use crate::keymap::{Command, CommandDispatcher, ContextId};
 use crate::task::{self, TaskDetailVm};
+use crate::ui::DATE_FORMAT;
 
 mod annotations;
 mod bindings;
@@ -25,10 +27,17 @@ use self::history::FormHistory;
 use self::state::{ConfirmAction, InlineEditTarget, ModalMode, TaskModalState};
 
 pub enum TaskDetailModalEvent {
-    Closed,
+    Closed {
+        task_id: Option<uuid::Uuid>,
+        was_creating: bool,
+    },
     SaveEdits {
         task_id: uuid::Uuid,
         update: TaskEditUpdate,
+    },
+    CreateTask {
+        draft: task::TaskDraft,
+        annotations: Vec<String>,
     },
 }
 
@@ -54,6 +63,7 @@ pub struct TaskDetailModal {
     scroll_handle: gpui::ScrollHandle,
     entities: ModalEntities,
     project_suggestions: Arc<Mutex<Vec<String>>>,
+    tag_suggestions: Arc<Mutex<Vec<String>>>,
     form_history: FormHistory,
 }
 
@@ -61,6 +71,7 @@ impl TaskDetailModal {
     pub fn new(cx: &mut gpui::Context<Self>) -> Self {
         let modal_entity = cx.entity().clone();
         let project_suggestions: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let tag_suggestions: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         let annotation_input = cx.new(|cx| {
             let on_change_entity = modal_entity.clone();
@@ -100,23 +111,58 @@ impl TaskDetailModal {
                         };
 
                         let needle = query.to_lowercase();
+                        let mut candidates = Vec::new();
+                        let mut seen = HashSet::new();
+
+                        for project in list.iter() {
+                            let parts: Vec<&str> = project
+                                .split('.')
+                                .filter(|part| !part.trim().is_empty())
+                                .collect();
+                            if parts.is_empty() {
+                                continue;
+                            }
+
+                            let mut prefix = String::new();
+                            for (idx, part) in parts.iter().enumerate() {
+                                if !prefix.is_empty() {
+                                    prefix.push('.');
+                                }
+                                prefix.push_str(part);
+
+                                let key = prefix.to_lowercase();
+                                if seen.insert(key) {
+                                    candidates.push(prefix.clone());
+                                }
+
+                                if idx + 1 < parts.len() {
+                                    let mut with_dot = prefix.clone();
+                                    with_dot.push('.');
+                                    let key = with_dot.to_lowercase();
+                                    if seen.insert(key) {
+                                        candidates.push(with_dot);
+                                    }
+                                }
+                            }
+                        }
+
                         let mut level_matches = Vec::new();
                         let mut prefix_matches = Vec::new();
                         let mut contains_matches = Vec::new();
 
-                        for project in list.iter() {
-                            let hay = project.to_lowercase();
+                        for candidate in candidates {
+                            let hay = candidate.to_lowercase();
                             if hay.starts_with(&needle) {
                                 let boundary = hay.len() == needle.len()
                                     || hay.as_bytes().get(needle.len()) == Some(&b'.')
                                     || needle.ends_with('.');
                                 if boundary {
-                                    level_matches.push(project.clone());
+                                    level_matches.push(candidate);
                                 } else {
-                                    prefix_matches.push(project.clone());
+                                    prefix_matches.push(candidate);
                                 }
                             } else if hay.contains(&needle) {
-                                contains_matches.push(project.clone());
+                                contains_matches.push(candidate);
                             }
                         }
 
@@ -138,24 +184,72 @@ impl TaskDetailModal {
 
         let due_input = cx.new(|cx| Input::new("task-edit-due", cx, "Due (YYYY-MM-DD)"));
 
-        let tags_input = cx.new(|cx| {
+        let tags_input = {
             let on_change_entity = modal_entity.clone();
+            let suggestions = tag_suggestions.clone();
 
-            Input::new("task-edit-tags", cx, "Add tag").with_on_change(Arc::new(
-                move |value, cx| {
-                    cx.defer({
-                        let entity = on_change_entity.clone();
-                        let v = value.to_string();
-                        move |cx| {
-                            let _ = entity.update(cx, |modal, cx| {
-                                modal.state.form.tag_draft = v;
-                                cx.notify();
-                            });
+            cx.new(|cx| {
+                Input::new("task-edit-tags", cx, "Add tag")
+                    .with_suggest(Arc::new(move |query| {
+                        let (prefix, needle) = match query
+                            .char_indices()
+                            .rev()
+                            .find(|(_, ch)| ch.is_whitespace() || *ch == ',')
+                        {
+                            Some((idx, _)) => (&query[..=idx], &query[idx + 1..]),
+                            None => ("", query),
+                        };
+                        let needle = needle.trim();
+                        if needle.is_empty() {
+                            return Vec::new();
                         }
-                    });
-                },
-            ))
-        });
+
+                        let Ok(list) = suggestions.lock() else {
+                            return Vec::new();
+                        };
+
+                        let needle_lower = needle.to_lowercase();
+                        let mut prefix_matches = Vec::new();
+                        let mut contains_matches = Vec::new();
+
+                        for tag in list.iter() {
+                            let hay = tag.to_lowercase();
+                            if hay.starts_with(&needle_lower) {
+                                prefix_matches.push(tag.clone());
+                            } else if hay.contains(&needle_lower) {
+                                contains_matches.push(tag.clone());
+                            }
+                        }
+
+                        prefix_matches.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+                        contains_matches.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+
+                        prefix_matches
+                            .into_iter()
+                            .chain(contains_matches)
+                            .take(8)
+                            .map(|tag| {
+                                let mut insert = String::new();
+                                insert.push_str(prefix);
+                                insert.push_str(&tag);
+                                crate::components::input::Suggestion::new(tag, insert)
+                            })
+                            .collect()
+                    }))
+                    .with_on_change(Arc::new(move |value, cx| {
+                        cx.defer({
+                            let entity = on_change_entity.clone();
+                            let v = value.to_string();
+                            move |cx| {
+                                let _ = entity.update(cx, |modal, cx| {
+                                    modal.state.form.tag_draft = v;
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }))
+            })
+        };
 
         let status_items = vec![
             DropdownItem::new("Pending"),
@@ -190,6 +284,7 @@ impl TaskDetailModal {
             scroll_handle: gpui::ScrollHandle::new(),
             entities,
             project_suggestions,
+            tag_suggestions,
             form_history: FormHistory::default(),
         }
     }
@@ -212,6 +307,35 @@ impl TaskDetailModal {
         }
     }
 
+    pub fn set_tag_suggestions(&mut self, tags: Vec<String>, _cx: &mut gpui::Context<Self>) {
+        if let Ok(mut list) = self.tag_suggestions.lock() {
+            *list = tags;
+        }
+    }
+
+    fn placeholder_detail() -> TaskDetailVm {
+        let task = task::Task::new(
+            uuid::Uuid::nil(),
+            None,
+            task::TaskStatus::Pending,
+            String::new(),
+            None,
+            task::TaskPriority::None,
+            HashSet::new(),
+            None,
+            None,
+            None,
+            None,
+            vec![],
+            HashSet::new(),
+            false,
+            false,
+            None,
+        );
+
+        TaskDetailVm::from_task(&task, &[])
+    }
+
     pub fn open_with_detail(
         &mut self,
         detail: TaskDetailVm,
@@ -228,6 +352,31 @@ impl TaskDetailModal {
         cx: &mut gpui::Context<Self>,
     ) {
         self.open_with_detail_mode(detail, true, window, cx);
+    }
+
+    pub fn open_create(&mut self, window: Option<&mut gpui::Window>, cx: &mut gpui::Context<Self>) {
+        self.reset_open_state();
+        self.state.task_id = None;
+        self.state.loading = false;
+        self.state.error = None;
+        self.state.original = Some(Self::placeholder_detail());
+        self.state.form = TaskForm::default();
+        self.state.errors.clear();
+        self.state.is_create = true;
+        self.state.mode = ModalMode::Edit;
+        self.state.edit_state = EditState::Navigating;
+        self.state.modal_focus = ModalFocus::Description;
+        self.state.annotations = AnnotationState::default();
+        self.reset_pending_state();
+        self.apply_form_inputs(cx);
+        self.form_history.clear();
+        self.form_history.push(self.state.form.clone());
+
+        if let Some(window) = window {
+            window.focus(&self.form_focus_handle);
+        }
+
+        cx.notify();
     }
 
     fn reset_open_state(&mut self) {
@@ -253,6 +402,7 @@ impl TaskDetailModal {
         self.state.form = TaskForm::default();
         self.state.errors.clear();
         self.state.mode = ModalMode::View;
+        self.state.is_create = false;
         self.state.edit_state = EditState::Navigating;
         self.state.annotations = AnnotationState::default();
         self.state.error = error;
@@ -272,6 +422,7 @@ impl TaskDetailModal {
         self.state.error = None;
         self.state.original = Some(detail.clone());
         self.state.errors.clear();
+        self.state.is_create = false;
         self.reset_pending_state();
         self.sync_from_detail(&detail, cx, true);
 
@@ -333,6 +484,7 @@ impl TaskDetailModal {
         self.state.loading = false;
         self.state.error = None;
         self.state.original = Some(detail.clone());
+        self.state.is_create = false;
         self.sync_from_detail(&detail, cx, reset_form);
         cx.notify();
     }
@@ -368,11 +520,16 @@ impl TaskDetailModal {
         self.state.loading = false;
         self.state.original = Some(detail);
         self.state.error = None;
+        self.state.is_create = false;
         self.reset_pending_state();
         cx.notify();
     }
 
     fn enter_edit_mode(&mut self, window: Option<&mut gpui::Window>, cx: &mut gpui::Context<Self>) {
+        if self.state.is_create {
+            return;
+        }
+
         let Some(detail) = self.state.original.clone() else {
             return;
         };
@@ -393,6 +550,11 @@ impl TaskDetailModal {
     }
 
     pub fn cancel_edit(&mut self, window: Option<&mut gpui::Window>, cx: &mut gpui::Context<Self>) {
+        if self.state.is_create {
+            self.close(window, cx);
+            return;
+        }
+
         let Some(detail) = self.state.original.clone() else {
             return;
         };
@@ -412,7 +574,15 @@ impl TaskDetailModal {
     }
 
     pub fn is_editing(&self) -> bool {
-        self.state.mode == ModalMode::Edit
+        self.state.mode == ModalMode::Edit && !self.state.is_create
+    }
+
+    pub fn is_creating(&self) -> bool {
+        self.state.mode == ModalMode::Edit && self.state.is_create
+    }
+
+    pub fn task_id(&self) -> Option<uuid::Uuid> {
+        self.state.task_id
     }
 
     fn apply_form_inputs(&mut self, cx: &mut gpui::Context<Self>) {
@@ -526,6 +696,11 @@ impl TaskDetailModal {
             return;
         }
 
+        if self.state.is_create {
+            self.submit_create(cx);
+            return;
+        }
+
         if self.state.original.is_none() {
             return;
         }
@@ -550,6 +725,69 @@ impl TaskDetailModal {
         cx.emit(TaskDetailModalEvent::SaveEdits {
             task_id: detail.identity.uuid,
             update,
+        });
+    }
+
+    fn submit_create(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.state.mode != ModalMode::Edit || !self.state.is_create {
+            return;
+        }
+
+        self.sync_form_from_inputs(cx);
+        self.state.errors = self.state.form.validate();
+        if !self.state.errors.is_empty() {
+            cx.notify();
+            return;
+        }
+
+        let description = self.state.form.description.trim().to_string();
+        let project = match self.state.form.project.trim() {
+            "" => None,
+            value => Some(value.to_string()),
+        };
+
+        let due = if self.state.form.due.trim().is_empty() {
+            None
+        } else {
+            NaiveDate::parse_from_str(self.state.form.due.trim(), DATE_FORMAT)
+                .ok()
+                .and_then(|date| date.and_hms_opt(0, 0, 0))
+                .map(|date| Utc.from_utc_datetime(&date))
+        };
+
+        let priority = match self.state.form.priority {
+            task::TaskPriority::None => None,
+            value => Some(value),
+        };
+
+        let status = match self.state.form.status.clone() {
+            task::TaskStatus::Pending => None,
+            value => Some(value),
+        };
+
+        let tags = self.state.form.tags.iter().cloned().collect();
+
+        let annotations = self
+            .state
+            .annotations
+            .items
+            .iter()
+            .filter_map(|item| match item.origin {
+                AnnotationOrigin::Added => Some(item.text.to_string()),
+                _ => None,
+            })
+            .collect();
+
+        cx.emit(TaskDetailModalEvent::CreateTask {
+            draft: task::TaskDraft {
+                description,
+                project,
+                priority,
+                status,
+                tags,
+                due,
+            },
+            annotations,
         });
     }
 
@@ -631,8 +869,13 @@ impl TaskDetailModal {
                 .update(cx, |input, cx| input.blur(window, cx));
         }
 
+        let task_id = self.state.task_id;
+        let was_creating = self.state.is_create;
         self.state = TaskModalState::default();
-        cx.emit(TaskDetailModalEvent::Closed);
+        cx.emit(TaskDetailModalEvent::Closed {
+            task_id,
+            was_creating,
+        });
         cx.notify();
     }
 
@@ -1093,7 +1336,13 @@ impl TaskDetailModal {
                 CommandResult::Handled
             }
             ModalFocus::Project => {
-                if self.project_suggestions_open(cx) {
+                let accepted = self
+                    .entities
+                    .project_input
+                    .update(cx, |input, _cx| input.consume_suggestion_accept());
+                if accepted {
+                    CommandResult::Handled
+                } else if self.project_suggestions_open(cx) {
                     CommandResult::NotHandled
                 } else {
                     self.exit_edit_field(window, cx);

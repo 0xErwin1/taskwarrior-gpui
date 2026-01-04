@@ -45,6 +45,7 @@ pub(super) fn render_task_detail_modal(
         panel::render_task_detail_panel(
             detail,
             state.mode,
+            state.is_create,
             state.edit_state,
             &state.form,
             &state.errors,

@@ -1,4 +1,5 @@
 use crate::{
+    app::DeleteConfirmState,
     components::toast::ToastKind,
     keymap::{Command, CommandDispatcher, ContextId, FocusTarget, KeyChord},
     task::{self, TaskSummary},
@@ -40,6 +41,28 @@ impl App {
         window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) {
+        if self.delete_confirm.is_some() {
+            let key = event.keystroke.key.as_str().to_lowercase();
+            let mods = &event.keystroke.modifiers;
+            let has_mods = mods.control || mods.alt || mods.shift || mods.platform;
+
+            if !has_mods {
+                match key.as_str() {
+                    "enter" | "y" => {
+                        self.confirm_delete_task(cx);
+                        return;
+                    }
+                    "escape" | "n" => {
+                        self.cancel_delete_confirm(cx);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+
+            return;
+        }
+
         if let Some(chord) = KeyChord::from_gpui(event) {
             let context = self.active_context(cx);
 
@@ -197,6 +220,125 @@ impl App {
         cx.notify();
     }
 
+    pub(super) fn open_task_create(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.task_detail_modal.read(cx).is_open() {
+            return;
+        }
+
+        self.focus_before_modal = self.focus_target;
+        self.task_detail_modal.update(cx, |modal, cx| {
+            modal.open_create(None, cx);
+        });
+        cx.notify();
+    }
+
+    pub(super) fn request_delete_task(
+        &mut self,
+        task_id: uuid::Uuid,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if self.delete_confirm.is_some() {
+            return;
+        }
+
+        if self.task_detail_modal.read(cx).is_editing() {
+            self.task_detail_modal.update(cx, |modal, cx| {
+                modal.cancel_edit(None, cx);
+            });
+        }
+
+        let Some(task) = self.tasks.iter().find(|task| task.uuid == task_id) else {
+            return;
+        };
+
+        let id_display = task
+            .working_id
+            .or(task.id)
+            .map(|id| format!("#{}", id))
+            .unwrap_or_else(|| task_id.to_string());
+
+        let mut tags: Vec<String> = task.tags.iter().cloned().collect();
+        tags.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+
+        self.delete_confirm = Some(DeleteConfirmState {
+            task_id,
+            id_display,
+            description: task.description.clone(),
+            project: task.project.clone(),
+            tags,
+        });
+        cx.notify();
+    }
+
+    pub(super) fn cancel_delete_confirm(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.delete_confirm.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(super) fn confirm_delete_task(&mut self, cx: &mut gpui::Context<Self>) {
+        let Some(confirm) = self.delete_confirm.take() else {
+            return;
+        };
+
+        let next_selection = self
+            .task_table
+            .read(cx)
+            .next_selection_after_delete(confirm.task_id);
+
+        if let Err(e) = self.task_service.delete_task(confirm.task_id) {
+            log::error!("[App] Failed to delete task: {}", e);
+            self.toast_host.update(cx, |host, cx| {
+                host.push(
+                    ToastKind::Error,
+                    format!("Failed to delete task: {}", e),
+                    cx,
+                );
+            });
+            return;
+        }
+
+        let updated_task = match self.task_service.get_task(confirm.task_id) {
+            Ok(task) => task,
+            Err(e) => {
+                log::error!("[App] Failed to reload deleted task: {}", e);
+                None
+            }
+        };
+
+        if let Some(task) = updated_task {
+            self.upsert_task_summary(task, cx);
+        } else {
+            self.tasks.retain(|task| task.uuid != confirm.task_id);
+            let summaries = self.tasks.clone();
+            self.update_ui_from_tasks(summaries, cx);
+        }
+
+        self.task_table.update(cx, |table, cx| {
+            if let Some(next_uuid) = next_selection {
+                if !table.select_task_by_uuid(next_uuid, cx) {
+                    table.clear_selection(cx);
+                }
+            } else {
+                table.clear_selection(cx);
+            }
+        });
+
+        let modal_task_id = self.task_detail_modal.read(cx).task_id();
+        if modal_task_id == Some(confirm.task_id) {
+            self.task_detail_modal.update(cx, |modal, cx| {
+                modal.close(None, cx);
+            });
+            self.toast_host.update(cx, |host, cx| {
+                host.push(ToastKind::Info, "Task deleted", cx);
+            });
+        }
+
+        self.status_bar.update(cx, |bar, cx| {
+            bar.set_dirty(cx);
+        });
+    }
+
     fn apply_task_update(&mut self, task: task::Task, cx: &mut gpui::Context<Self>) {
         let summary = TaskSummary::from(&task);
         if let Some(existing) = self.tasks.iter_mut().find(|t| t.uuid == task.uuid) {
@@ -212,6 +354,18 @@ impl App {
         self.task_detail_modal.update(cx, |modal, cx| {
             modal.apply_saved_detail(detail, cx);
         });
+    }
+
+    fn upsert_task_summary(&mut self, task: task::Task, cx: &mut gpui::Context<Self>) {
+        let summary = TaskSummary::from(&task);
+        if let Some(existing) = self.tasks.iter_mut().find(|t| t.uuid == task.uuid) {
+            *existing = summary;
+        } else {
+            self.tasks.push(summary);
+        }
+
+        let summaries = self.tasks.clone();
+        self.update_ui_from_tasks(summaries, cx);
     }
 
     fn sync_task_detail(&mut self, task: task::Task, cx: &mut gpui::Context<Self>) {
@@ -362,6 +516,87 @@ impl App {
                 modal.cancel_edit(None, cx);
             });
         }
+    }
+
+    pub(super) fn handle_create_task(
+        &mut self,
+        draft: task::TaskDraft,
+        annotations: Vec<String>,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let created = match self.task_service.create_task(draft) {
+            Ok(task) => task,
+            Err(e) => {
+                log::error!("[App] Failed to create task: {}", e);
+                self.toast_host.update(cx, |host, cx| {
+                    host.push(
+                        ToastKind::Error,
+                        format!("Failed to create task: {}", e),
+                        cx,
+                    );
+                });
+                return;
+            }
+        };
+
+        let mut latest_task = created;
+        for text in annotations {
+            match self.task_service.add_annotation(latest_task.uuid, text) {
+                Ok(task) => {
+                    latest_task = task;
+                }
+                Err(e) => {
+                    log::error!("[App] Failed to add annotation: {}", e);
+                    self.toast_host.update(cx, |host, cx| {
+                        host.push(
+                            ToastKind::Error,
+                            format!("Failed to add annotation: {}", e),
+                            cx,
+                        );
+                    });
+                    break;
+                }
+            }
+        }
+
+        let created_uuid = latest_task.uuid;
+        self.created_task_uuid = Some(created_uuid);
+        self.upsert_task_summary(latest_task, cx);
+
+        self.task_detail_modal.update(cx, |modal, cx| {
+            modal.close(None, cx);
+        });
+
+        self.status_bar.update(cx, |bar, cx| {
+            bar.set_dirty(cx);
+        });
+    }
+
+    pub(super) fn handle_modal_closed(
+        &mut self,
+        task_id: Option<uuid::Uuid>,
+        was_creating: bool,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        self.focus_target = self.focus_before_modal;
+
+        self.task_table.update(cx, |table, cx| {
+            table.blur_filter_bar(cx);
+            table.blur_table_headers(cx);
+
+            let uuid_to_select = if was_creating {
+                self.created_task_uuid.take()
+            } else {
+                task_id
+            };
+
+            if let Some(uuid) = uuid_to_select {
+                let _ = table.select_task_by_uuid(uuid, cx);
+            }
+        });
+
+        self.needs_focus_restore = true;
+        cx.notify();
     }
 
     fn active_context(&self, cx: &gpui::Context<Self>) -> ContextId {

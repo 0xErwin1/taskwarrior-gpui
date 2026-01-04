@@ -49,6 +49,12 @@ impl StatusBar {
         cx.notify();
     }
 
+    pub fn set_dirty(&mut self, cx: &mut Context<Self>) {
+        self.last_sync_message = "Needs sync".to_string();
+        self.sync_state = SyncState::Idle;
+        cx.notify();
+    }
+
     pub fn set_error(&mut self, message: String, cx: &mut Context<Self>) {
         self.error_message = Some(message);
         cx.notify();

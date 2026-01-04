@@ -2,14 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
-use taskchampion::{
-    Operations, Replica, ServerConfig, Status, StorageConfig, Tag, storage::AccessMode,
-};
+use taskchampion::{Operations, Replica, ServerConfig, Status, StorageConfig, storage::AccessMode};
 use uuid::Uuid;
 
 use super::error::{TaskError, TaskResult};
 use super::filter::TaskFilter;
-use super::model::{Task, TaskDetailVm, TaskOverview, TaskStatus, TaskSummary};
+use super::model::{Task, TaskDetailVm, TaskDraft, TaskOverview, TaskStatus, TaskSummary};
 
 pub struct TaskService {
     replica: Replica,
@@ -95,7 +93,7 @@ impl TaskService {
         })
     }
 
-    pub fn create_task(&mut self, description: String) -> TaskResult<Task> {
+    pub fn create_task(&mut self, draft: TaskDraft) -> TaskResult<Task> {
         let uuid = Uuid::new_v4();
         let mut ops = Operations::new();
 
@@ -104,12 +102,72 @@ impl TaskService {
             .create_task(uuid, &mut ops)
             .map_err(|e| TaskError::Storage(e.to_string()))?;
 
+        let entry_time = Utc::now();
         tc_task
-            .set_description(description, &mut ops)
+            .set_status(Status::Pending, &mut ops)
+            .map_err(|e| TaskError::Storage(e.to_string()))?;
+        tc_task
+            .set_entry(Some(entry_time), &mut ops)
+            .map_err(|e| TaskError::Storage(e.to_string()))?;
+
+        tc_task
+            .set_description(draft.description, &mut ops)
+            .map_err(|e| TaskError::Storage(e.to_string()))?;
+
+        if let Some(project) = draft.project {
+            tc_task
+                .set_value("project", Some(project), &mut ops)
+                .map_err(|e| TaskError::Storage(e.to_string()))?;
+        }
+
+        if let Some(priority) = draft.priority {
+            let pri: String = priority.into();
+            tc_task
+                .set_priority(pri, &mut ops)
+                .map_err(|e| TaskError::Storage(e.to_string()))?;
+        }
+
+        if let Some(due) = draft.due {
+            tc_task
+                .set_due(Some(due), &mut ops)
+                .map_err(|e| TaskError::Storage(e.to_string()))?;
+        }
+
+        for tag_str in draft.tags {
+            let key = format!("tag_{}", tag_str);
+            tc_task
+                .set_value(key, Some(String::new()), &mut ops)
+                .map_err(|e| TaskError::Storage(e.to_string()))?;
+        }
+
+        if let Some(status) = draft.status {
+            match status {
+                TaskStatus::Completed => {
+                    tc_task
+                        .done(&mut ops)
+                        .map_err(|e| TaskError::Storage(e.to_string()))?;
+                }
+                TaskStatus::Deleted => {
+                    tc_task
+                        .set_status(Status::Deleted, &mut ops)
+                        .map_err(|e| TaskError::Storage(e.to_string()))?;
+                }
+                TaskStatus::Pending => {}
+                TaskStatus::Recurring | TaskStatus::Unknown(_) => {}
+            }
+        }
+
+        let modified_time = Utc::now();
+        tc_task
+            .set_modified(modified_time, &mut ops)
             .map_err(|e| TaskError::Storage(e.to_string()))?;
 
         self.replica
             .commit_operations(ops)
+            .map_err(|e| TaskError::Storage(e.to_string()))?;
+
+        self.replica
+            .rebuild_working_set(false)
             .map_err(|e| TaskError::Storage(e.to_string()))?;
 
         let working_set = self
@@ -296,22 +354,24 @@ impl TaskService {
         }
 
         if let Some(new_tags) = tags {
-            let current_tags: HashSet<String> = tc_task.get_tags().map(|t| t.to_string()).collect();
+            let current_tags: HashSet<String> = tc_task
+                .get_taskmap()
+                .keys()
+                .filter_map(|key| key.strip_prefix("tag_").map(|tag| tag.to_string()))
+                .collect();
 
             for tag_str in current_tags.difference(&new_tags) {
-                if let Ok(tag) = Tag::try_from(tag_str.as_str()) {
-                    tc_task
-                        .remove_tag(&tag, &mut ops)
-                        .map_err(|e| TaskError::Storage(e.to_string()))?;
-                }
+                let key = format!("tag_{}", tag_str);
+                tc_task
+                    .set_value(key, None, &mut ops)
+                    .map_err(|e| TaskError::Storage(e.to_string()))?;
             }
 
             for tag_str in new_tags.difference(&current_tags) {
-                if let Ok(tag) = Tag::try_from(tag_str.as_str()) {
-                    tc_task
-                        .add_tag(&tag, &mut ops)
-                        .map_err(|e| TaskError::Storage(e.to_string()))?;
-                }
+                let key = format!("tag_{}", tag_str);
+                tc_task
+                    .set_value(key, Some(String::new()), &mut ops)
+                    .map_err(|e| TaskError::Storage(e.to_string()))?;
             }
         }
 
@@ -431,10 +491,9 @@ impl TaskService {
             .map_err(|e| TaskError::Storage(e.to_string()))?
             .ok_or(TaskError::NotFound(uuid))?;
 
-        let tag = Tag::try_from(tag_str).map_err(|_| TaskError::InvalidTag(tag_str.to_string()))?;
-
+        let key = format!("tag_{}", tag_str);
         tc_task
-            .add_tag(&tag, &mut ops)
+            .set_value(key, Some(String::new()), &mut ops)
             .map_err(|e| TaskError::Storage(e.to_string()))?;
 
         self.replica
@@ -453,10 +512,9 @@ impl TaskService {
             .map_err(|e| TaskError::Storage(e.to_string()))?
             .ok_or(TaskError::NotFound(uuid))?;
 
-        let tag = Tag::try_from(tag_str).map_err(|_| TaskError::InvalidTag(tag_str.to_string()))?;
-
+        let key = format!("tag_{}", tag_str);
         tc_task
-            .remove_tag(&tag, &mut ops)
+            .set_value(key, None, &mut ops)
             .map_err(|e| TaskError::Storage(e.to_string()))?;
 
         self.replica

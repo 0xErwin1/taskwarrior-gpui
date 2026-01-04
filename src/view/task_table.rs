@@ -7,6 +7,7 @@ use gpui::prelude::*;
 use crate::{
     components::{
         self,
+        action_button::ActionButton,
         button::{Dropdown, DropdownItem},
         input::Input,
     },
@@ -751,6 +752,45 @@ impl TaskTable {
             .map(|task| task.uuid)
     }
 
+    pub fn select_task_by_uuid(&mut self, uuid: uuid::Uuid, cx: &mut gpui::Context<Self>) -> bool {
+        let Some(idx) = self.cached_tasks.iter().position(|task| task.uuid == uuid) else {
+            self.selected_page_idx = None;
+            self.selected_global_idx = None;
+            cx.notify();
+            return false;
+        };
+
+        let page = idx / self.pagination.page_size + 1;
+        self.pagination.current_page(page);
+        let page_first_idx = self.pagination.first_item_index();
+        self.selected_global_idx = Some(idx);
+        self.selected_page_idx = Some(idx - page_first_idx);
+        cx.notify();
+        true
+    }
+
+    pub fn next_selection_after_delete(&self, deleted_uuid: uuid::Uuid) -> Option<uuid::Uuid> {
+        let selected_uuid = self.selected_task_uuid();
+        if selected_uuid != Some(deleted_uuid) {
+            return selected_uuid;
+        }
+
+        let idx = self
+            .cached_tasks
+            .iter()
+            .position(|task| task.uuid == deleted_uuid)?;
+
+        if idx + 1 < self.cached_tasks.len() {
+            return Some(self.cached_tasks[idx + 1].uuid);
+        }
+
+        if idx > 0 {
+            return Some(self.cached_tasks[idx - 1].uuid);
+        }
+
+        None
+    }
+
     pub fn focus_search_input(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
         self.filter_bar_focus = FilterBarFocus::SearchInput;
         self.search_input.update(cx, |input, cx| {
@@ -1059,6 +1099,13 @@ impl TaskTable {
             .child(status_wrapper)
             .child(priority_wrapper)
             .child(due_wrapper)
+            .child(
+                ActionButton::new("+ New")
+                    .id("task-new")
+                    .on_click(cx.listener(|_table, _event, _window, cx| {
+                        cx.emit(TaskTableEvent::CreateRequested);
+                    })),
+            )
             .child(clear_button);
 
         gpui::div()
@@ -1175,6 +1222,11 @@ impl TaskTable {
                     .w(gpui::rems(6.0))
                     .child(self.render_header_column(SortColumn::Status, "header-status", cx)),
             )
+            .child(
+                gpui::div()
+                    .w(gpui::rems(2.0))
+                    .child(components::label::Label::new("").text_color(theme.muted)),
+            )
     }
 
     fn render_row(&self, idx: usize, row: &TaskRow, cx: &gpui::Context<Self>) -> gpui::Div {
@@ -1182,19 +1234,32 @@ impl TaskTable {
         let selected = self.selected_page_idx == Some(idx);
         let row_uuid = row.uuid;
 
-        gpui::div()
+        let delete_button = gpui::div()
+            .id(("delete-btn", idx))
             .flex()
             .items_center()
+            .justify_center()
+            .w(gpui::rems(2.0))
+            .h(gpui::rems(2.0))
+            .rounded_md()
+            .text_color(theme.error)
+            .cursor_pointer()
+            .hover(|s| s.bg(theme.hover).text_color(theme.error))
+            .active(|s| s.bg(theme.selection))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |table, _event: &gpui::MouseDownEvent, _window, cx| {
+                    table.select_row(idx, cx);
+                    cx.emit(TaskTableEvent::DeleteRequested(row_uuid));
+                }),
+            )
+            .child(components::label::Label::new("✕").text_sm());
+
+        let row_content = gpui::div()
+            .flex()
+            .flex_1()
+            .items_center()
             .gap_2()
-            .px_4()
-            .py_1()
-            .border_b_1()
-            .border_color(theme.divider)
-            .text_color(theme.foreground)
-            .when(selected, |d| {
-                d.bg(theme.selection).text_color(theme.selection_foreground)
-            })
-            .when(!selected, |d| d.hover(|s| s.bg(theme.hover)))
             .cursor_pointer()
             .on_mouse_down(
                 gpui::MouseButton::Left,
@@ -1249,7 +1314,23 @@ impl TaskTable {
                     components::label::Label::new(row.status.clone())
                         .text_color(self.status_color(row, cx)),
                 ),
-            )
+            );
+
+        gpui::div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_4()
+            .py_1()
+            .border_b_1()
+            .border_color(theme.divider)
+            .text_color(theme.foreground)
+            .when(selected, |d| {
+                d.bg(theme.selection).text_color(theme.selection_foreground)
+            })
+            .when(!selected, |d| d.hover(|s| s.bg(theme.hover)))
+            .child(row_content)
+            .child(delete_button)
     }
 
     fn render_footer(&self, cx: &gpui::Context<Self>) -> gpui::Div {
@@ -1395,6 +1476,16 @@ impl CommandDispatcher for TaskTable {
                 self.blur_filter_bar(cx);
                 true
             }
+            Command::CreateTask => {
+                cx.emit(TaskTableEvent::CreateRequested);
+                true
+            }
+            Command::DeleteSelectedTask => {
+                if let Some(task_id) = self.selected_task_uuid() {
+                    cx.emit(TaskTableEvent::DeleteRequested(task_id));
+                }
+                true
+            }
             Command::ExpandProject | Command::CollapseProject => false,
             _ => false,
         }
@@ -1403,6 +1494,8 @@ impl CommandDispatcher for TaskTable {
 
 pub enum TaskTableEvent {
     OpenTask(uuid::Uuid),
+    CreateRequested,
+    DeleteRequested(uuid::Uuid),
 }
 
 impl gpui::EventEmitter<TaskTableEvent> for TaskTable {}

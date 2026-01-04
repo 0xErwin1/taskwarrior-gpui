@@ -1,4 +1,3 @@
-use gpui::prelude::*;
 use std::sync::Arc;
 
 use crate::components::dialog::{Dialog, DialogButton, DialogButtonVariant};
@@ -7,6 +6,7 @@ use crate::theme::Theme;
 #[derive(Clone)]
 pub struct ConfirmDialog {
     title: String,
+    message: Option<String>,
     hint: Option<String>,
     cancel: Option<(
         String,
@@ -25,11 +25,17 @@ impl ConfirmDialog {
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
+            message: None,
             hint: None,
             cancel: None,
             confirm: None,
             on_backdrop_click: None,
         }
+    }
+
+    pub fn message(mut self, message: impl Into<String>) -> Self {
+        self.message = Some(message.into());
+        self
     }
 
     pub fn hint(mut self, hint: impl Into<String>) -> Self {
@@ -74,6 +80,9 @@ impl ConfirmDialog {
 
     pub fn render(self, theme: &Theme) -> gpui::Div {
         let mut dialog = Dialog::new(self.title);
+        if let Some(message) = self.message {
+            dialog = dialog.message(message);
+        }
         if let Some(hint) = self.hint {
             dialog = dialog.hint(hint);
         }

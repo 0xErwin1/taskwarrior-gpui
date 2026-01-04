@@ -447,6 +447,15 @@ impl TaskDetailVm {
 
 impl From<taskchampion::Task> for Task {
     fn from(task: taskchampion::Task) -> Self {
+        let mut tags: HashSet<String> = task
+            .get_taskmap()
+            .keys()
+            .filter_map(|key| key.strip_prefix("tag_").map(|tag| tag.to_string()))
+            .collect();
+        for tag in task.get_tags().filter(|tag| tag.is_synthetic()) {
+            tags.insert(tag.to_string());
+        }
+
         Self {
             uuid: task.get_uuid(),
             id: task.get_value("ID").map(|value| value.parse().unwrap()),
@@ -454,7 +463,7 @@ impl From<taskchampion::Task> for Task {
             description: task.get_description().to_string(),
             project: task.get_value("project").map(|v| v.to_string()),
             priority: task.get_priority().into(),
-            tags: task.get_tags().map(|t| t.to_string()).collect(),
+            tags,
             due: task.get_due().map(Into::into),
             wait: task.get_wait().map(Into::into),
             entry: task.get_entry().map(Into::into),
@@ -477,6 +486,16 @@ pub struct TaskUpdate {
     pub wait: Option<DateTime<Utc>>,
     pub annotations: Option<Vec<String>>,
     pub dependencies: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskDraft {
+    pub description: String,
+    pub project: Option<String>,
+    pub priority: Option<TaskPriority>,
+    pub status: Option<TaskStatus>,
+    pub tags: HashSet<String>,
+    pub due: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]

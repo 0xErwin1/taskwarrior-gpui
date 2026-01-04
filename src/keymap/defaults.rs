@@ -138,6 +138,16 @@ pub fn build_default_keymap() -> KeymapLayer {
     );
     layer.bind(
         ContextId::Table,
+        KeyChord::new(Key::Char('c'), Mods::none()),
+        Command::CreateTask,
+    );
+    layer.bind(
+        ContextId::Table,
+        KeyChord::new(Key::Delete, Mods::none()),
+        Command::DeleteSelectedTask,
+    );
+    layer.bind(
+        ContextId::Table,
         KeyChord::new(Key::ArrowLeft, Mods::none()),
         Command::CollapseProject,
     );

@@ -18,6 +18,7 @@ pub struct Input {
 
     suggestions: Vec<Suggestion>,
     suggestions_open: bool,
+    accepted_suggestion: bool,
     active_suggestion: usize,
     suggest: Option<Arc<dyn Fn(&str) -> Vec<Suggestion> + Send + Sync>>,
     on_change: Option<Arc<dyn Fn(&str, &mut gpui::Context<Self>) + Send + Sync>>,
@@ -42,6 +43,7 @@ impl Input {
 
             suggestions: vec![],
             suggestions_open: false,
+            accepted_suggestion: false,
             active_suggestion: 0,
             suggest: None,
             on_change: None,
@@ -87,6 +89,12 @@ impl Input {
 
     pub fn element_id(&self) -> &gpui::ElementId {
         &self.id
+    }
+
+    pub fn consume_suggestion_accept(&mut self) -> bool {
+        let accepted = self.accepted_suggestion;
+        self.accepted_suggestion = false;
+        accepted
     }
 
     pub fn has_suggestions_open(&self) -> bool {
@@ -222,6 +230,20 @@ impl Input {
         }
         self.active_suggestion = index;
         self.accept_suggestion(cx);
+    }
+
+    fn mark_suggestion_accept(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.accepted_suggestion {
+            return;
+        }
+
+        self.accepted_suggestion = true;
+        let entity = cx.entity().clone();
+        cx.defer(move |cx| {
+            let _ = entity.update(cx, |input, _cx| {
+                input.accepted_suggestion = false;
+            });
+        });
     }
 
     fn submit(&mut self, cx: &mut gpui::Context<Self>) {
@@ -369,6 +391,7 @@ impl Input {
 
                 // For single-line, check suggestions then submit
                 if self.suggestions_open {
+                    self.mark_suggestion_accept(cx);
                     self.accept_suggestion(cx);
                 } else {
                     self.submit(cx);
@@ -396,6 +419,17 @@ impl Input {
 
             "up" => self.move_suggestion(-1, cx),
             "down" => self.move_suggestion(1, cx),
+            "space" => {
+                if ctrl {
+                    return;
+                }
+                if self.suggestions_open {
+                    self.mark_suggestion_accept(cx);
+                    self.accept_suggestion(cx);
+                } else {
+                    self.insert_text(" ", cx);
+                }
+            }
 
             "left" => {
                 if ctrl {

@@ -69,6 +69,9 @@ These shortcuts work when the task table has focus:
 | Shortcut | Action |
 |----------|--------|
 | `Enter` | Open selected task details |
+| `e` | Edit selected task |
+| `c` | Create new task |
+| `Delete` | Delete selected task (with confirmation) |
 | `←` | Collapse current project |
 | `→` | Expand current project |
 
@@ -203,16 +206,56 @@ These shortcuts work when a filter dropdown (Status/Priority/Due) has focus:
 | `Ctrl+H` | Focus previous filter element |
 | `Ctrl+J` | Focus table headers |
 
-## Modal (Task Details)
+## Modal (Task Details - View Mode)
 
 These shortcuts work when viewing task details:
 
 | Shortcut | Action |
 |----------|--------|
-| `Escape` | Cancel edit (when editing) or close modal |
+| `Escape` | Close modal |
+| `e` | Enter edit mode |
 | `j` / `↓` | Scroll down |
 | `k` / `↑` | Scroll up |
-| `Ctrl+Enter` | Save edits (when editing) or close modal |
+
+## Modal (Task Details - Edit Mode - Navigating)
+
+These shortcuts work when editing a task but not actively typing in a field:
+
+| Shortcut | Action |
+|----------|--------|
+| `Escape` | Close modal (prompts if unsaved changes) |
+| `Ctrl+S` | Save changes |
+| `j` / `↓` / `Tab` | Focus next field |
+| `k` / `↑` / `Shift+Tab` | Focus previous field |
+| `Enter` / `Space` | Edit focused field or item |
+| `Delete` / `Backspace` | Delete selected item (tag/annotation) |
+| `h` / `l` | Navigate between items (tags/annotations) |
+| `u` | Undo last change |
+| `r` | Redo last undone change |
+| `y` | Confirm action (in delete dialogs) |
+| `n` | Cancel action (in delete dialogs) |
+
+## Modal (Task Details - Edit Mode - Typing)
+
+These shortcuts work when actively typing in an input field:
+
+| Shortcut | Action |
+|----------|--------|
+| `Escape` | Exit field (return to navigation) |
+| `Ctrl+S` | Save all changes |
+| `Enter` | Submit field or exit (depends on field type) |
+
+## Modal (Task Details - Edit Mode - Dropdown Open)
+
+These shortcuts work when a dropdown (Priority/Status) is open:
+
+| Shortcut | Action |
+|----------|--------|
+| `Escape` | Close dropdown |
+| `Ctrl+S` | Save all changes |
+| `Enter` / `Space` | Select option and close dropdown |
+| `j` / `↓` | Select next option |
+| `k` / `↑` | Select previous option |
 
 ## Search Input Editing
 

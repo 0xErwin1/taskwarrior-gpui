@@ -12,6 +12,8 @@ pub enum Command {
     // Actions
     OpenSelectedTask,
     OpenTaskEdit,
+    CreateTask,
+    DeleteSelectedTask,
     Sync,
 
     // Focus
@@ -79,6 +81,8 @@ impl Command {
             "ClearSelection" => Some(Self::ClearSelection),
             "OpenSelectedTask" => Some(Self::OpenSelectedTask),
             "OpenTaskEdit" => Some(Self::OpenTaskEdit),
+            "CreateTask" => Some(Self::CreateTask),
+            "DeleteSelectedTask" => Some(Self::DeleteSelectedTask),
             "Sync" => Some(Self::Sync),
             "FocusSearch" => Some(Self::FocusSearch),
             "FocusTable" => Some(Self::FocusTable),
@@ -137,6 +141,8 @@ impl Command {
             Self::ClearSelection => "ClearSelection",
             Self::OpenSelectedTask => "OpenSelectedTask",
             Self::OpenTaskEdit => "OpenTaskEdit",
+            Self::CreateTask => "CreateTask",
+            Self::DeleteSelectedTask => "DeleteSelectedTask",
             Self::Sync => "Sync",
             Self::FocusSearch => "FocusSearch",
             Self::FocusTable => "FocusTable",

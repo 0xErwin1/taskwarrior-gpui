@@ -6,7 +6,7 @@ pub mod service;
 pub use error::{TaskError, TaskResult};
 pub use filter::{DueDateFilter, TagsFilterMode, TaskFilter};
 pub use model::{
-    Task, TaskAnnotation, TaskDetailState, TaskDetailVm, TaskOverview, TaskPriority, TaskStatus,
-    TaskSummary, TaskUpdate,
+    Task, TaskAnnotation, TaskDetailState, TaskDetailVm, TaskDraft, TaskOverview, TaskPriority,
+    TaskStatus, TaskSummary, TaskUpdate,
 };
 pub use service::{SyncResult, TaskService};
