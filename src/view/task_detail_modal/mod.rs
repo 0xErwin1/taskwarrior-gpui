@@ -256,7 +256,24 @@ impl TaskDetailModal {
             DropdownItem::new("Completed"),
             DropdownItem::new("Deleted"),
         ];
-        let status_dropdown = cx.new(|_cx| Dropdown::new("task-edit-status").items(status_items));
+        let status_dropdown = {
+            let modal_entity = modal_entity.clone();
+            cx.new(|_cx| {
+                Dropdown::new("task-edit-status")
+                    .items(status_items)
+                    .on_select(Arc::new(move |index, _item, cx| {
+                        cx.update_entity(&modal_entity, |modal, cx| {
+                            modal.state.form.status = match index {
+                                0 => task::TaskStatus::Pending,
+                                1 => task::TaskStatus::Completed,
+                                2 => task::TaskStatus::Deleted,
+                                _ => task::TaskStatus::Pending,
+                            };
+                            cx.notify();
+                        });
+                    }))
+            })
+        };
 
         let priority_items = vec![
             DropdownItem::new("High"),
@@ -264,8 +281,25 @@ impl TaskDetailModal {
             DropdownItem::new("Low"),
             DropdownItem::new("None"),
         ];
-        let priority_dropdown =
-            cx.new(|_cx| Dropdown::new("task-edit-priority").items(priority_items));
+        let priority_dropdown = {
+            let modal_entity = modal_entity.clone();
+            cx.new(|_cx| {
+                Dropdown::new("task-edit-priority")
+                    .items(priority_items)
+                    .on_select(Arc::new(move |index, _item, cx| {
+                        cx.update_entity(&modal_entity, |modal, cx| {
+                            modal.state.form.priority = match index {
+                                0 => task::TaskPriority::High,
+                                1 => task::TaskPriority::Medium,
+                                2 => task::TaskPriority::Low,
+                                3 => task::TaskPriority::None,
+                                _ => task::TaskPriority::None,
+                            };
+                            cx.notify();
+                        });
+                    }))
+            })
+        };
 
         let entities = ModalEntities {
             annotation_input,
