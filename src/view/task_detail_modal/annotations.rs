@@ -41,11 +41,10 @@ pub(super) enum AnnotationOrigin {
     },
 }
 
-fn annotation_id(entry: DateTime<Utc>, text: &str, index: usize) -> AnnotationId {
+fn annotation_id(entry: DateTime<Utc>, text: &str) -> AnnotationId {
     let mut hasher = DefaultHasher::new();
     entry.timestamp_millis().hash(&mut hasher);
     text.hash(&mut hasher);
-    index.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -54,9 +53,8 @@ impl AnnotationState {
         let items: Vec<AnnotationView> = detail
             .annotations
             .iter()
-            .enumerate()
-            .map(|(index, annotation)| AnnotationView {
-                id: annotation_id(annotation.entry, &annotation.content, index),
+            .map(|annotation| AnnotationView {
+                id: annotation_id(annotation.entry, &annotation.content),
                 created_at: annotation.entry,
                 text: annotation.content.clone().into(),
                 origin: AnnotationOrigin::Original,
@@ -78,7 +76,7 @@ impl AnnotationState {
     }
 
     pub(super) fn add_local(&mut self, text: SharedString, created_at: DateTime<Utc>) {
-        let id = annotation_id(created_at, text.as_ref(), self.items.len());
+        let id = annotation_id(created_at, text.as_ref());
         self.items.push(AnnotationView {
             id,
             created_at,

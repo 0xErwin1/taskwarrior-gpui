@@ -120,6 +120,7 @@ pub(super) fn render_task_detail_panel<OnCloseClick>(
     tags_input: &gpui::Entity<Input>,
     status_dropdown: &gpui::Entity<Dropdown>,
     priority_dropdown: &gpui::Entity<Dropdown>,
+    focus_handle: &gpui::FocusHandle,
     form_focus_handle: &gpui::FocusHandle,
     scroll_handle: &gpui::ScrollHandle,
     theme: &Theme,
@@ -300,7 +301,11 @@ where
         .min_h_0()
         .overflow_y_scroll()
         .track_scroll(scroll_handle)
-        .track_focus(form_focus_handle)
+        .track_focus(if mode == ModalMode::View {
+            focus_handle
+        } else {
+            form_focus_handle
+        })
         .px(gpui::rems(1.0))
         .py(gpui::rems(0.75))
         .gap_4()
@@ -678,6 +683,7 @@ fn render_tags_section(
 
         gpui::div()
             .flex()
+            .flex_wrap()
             .items_center()
             .gap_2()
             .children(chips)
@@ -694,6 +700,7 @@ fn render_tags_section(
 
         gpui::div()
             .flex()
+            .flex_wrap()
             .gap_2()
             .children(chips)
             .into_any_element()
@@ -711,7 +718,14 @@ fn render_tags_section(
                         .custom(Theme::alpha(theme.muted, 0.2), theme.muted)
                         .into_any_element()
                 });
-                div.child(gpui::div().flex().gap_2().children(vchips).text_sm())
+                div.child(
+                    gpui::div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .children(vchips)
+                        .text_sm(),
+                )
             }),
     )
 }

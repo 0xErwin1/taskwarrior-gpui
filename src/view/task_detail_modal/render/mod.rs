@@ -61,6 +61,7 @@ pub(super) fn render_task_detail_modal(
             tags_input,
             status_dropdown,
             priority_dropdown,
+            focus_handle,
             form_focus_handle,
             scroll_handle,
             &theme,

@@ -877,6 +877,8 @@ impl TaskDetailModal {
         self.entities.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
+
+        self.state.annotation_selected = None;
         cx.notify();
     }
 
@@ -1334,6 +1336,10 @@ impl TaskDetailModal {
 
         match self.state.modal_focus {
             ModalFocus::TagsInput => {
+                self.entities.tags_input.update(cx, |input, cx| {
+                    input.close_suggestions(cx);
+                });
+
                 self.sync_form_from_inputs(cx);
 
                 if let Some(InlineEditTarget::Tag(i)) = self.state.inline_edit {
@@ -1581,7 +1587,6 @@ impl TaskDetailModal {
                 ConfirmAction::DeleteTag { index, .. } => {
                     if index < self.state.form.tags.len() {
                         self.state.form.tags.remove(index);
-                        // Adjust selection
                         if self.state.form.tags.is_empty() {
                             self.state.tag_selected = None;
                         } else if let Some(sel) = self.state.tag_selected {
@@ -1710,16 +1715,6 @@ impl TaskDetailModal {
 
                         match ann.origin {
                             AnnotationOrigin::Added => {
-                                self.state.inline_edit =
-                                    Some(InlineEditTarget::Annotation(actual_index));
-
-                                let ann_value = ann.text.to_string();
-                                self.entities.annotation_input.update(cx, |input, cx| {
-                                    input.set_value(ann_value, cx);
-                                });
-
-                                self.enter_edit_field(window, cx);
-
                                 return CommandResult::Handled;
                             }
                             AnnotationOrigin::Original => {

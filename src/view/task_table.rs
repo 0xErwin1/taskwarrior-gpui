@@ -108,7 +108,7 @@ impl Default for SortState {
     fn default() -> Self {
         Self {
             column: SortColumn::Priority,
-            direction: SortDirection::Desc,
+            direction: SortDirection::Asc,
         }
     }
 }

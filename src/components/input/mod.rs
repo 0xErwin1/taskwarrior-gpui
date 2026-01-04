@@ -14,6 +14,7 @@ pub struct Input {
     placeholder: gpui::SharedString,
 
     cursor_pos: usize,
+    selection_anchor: Option<usize>,
     multiline: bool,
 
     suggestions: Vec<Suggestion>,
@@ -39,6 +40,7 @@ impl Input {
             placeholder: placeholder.into(),
 
             cursor_pos: 0,
+            selection_anchor: None,
             multiline: false,
 
             suggestions: vec![],
@@ -101,6 +103,11 @@ impl Input {
         self.suggestions_open
     }
 
+    pub fn close_suggestions(&mut self, cx: &mut gpui::Context<Self>) {
+        self.suggestions_open = false;
+        cx.notify();
+    }
+
     pub fn set_value(&mut self, value: impl Into<String>, cx: &mut gpui::Context<Self>) {
         self.value = value.into();
         self.cursor_pos = self.value.len();
@@ -128,6 +135,67 @@ impl Input {
     pub fn blur(&self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
         window.blur();
         cx.notify();
+    }
+
+    fn has_selection(&self) -> bool {
+        self.selection_anchor.is_some()
+    }
+
+    fn selection_range(&self) -> Option<std::ops::Range<usize>> {
+        self.selection_anchor.map(|anchor| {
+            let start = anchor.min(self.cursor_pos);
+            let end = anchor.max(self.cursor_pos);
+            start..end
+        })
+    }
+
+    fn clear_selection(&mut self) {
+        self.selection_anchor = None;
+    }
+
+    fn set_selection(&mut self, anchor: usize, cursor: usize) {
+        self.selection_anchor = Some(anchor);
+        self.cursor_pos = cursor;
+    }
+
+    fn select_all(&mut self) {
+        self.selection_anchor = Some(0);
+        self.cursor_pos = self.value.len();
+    }
+
+    fn delete_selection(&mut self, cx: &mut gpui::Context<Self>) -> bool {
+        if let Some(range) = self.selection_range() {
+            self.value.drain(range.clone());
+            self.cursor_pos = range.start;
+            self.clear_selection();
+            if let Some(on_change) = self.on_change.clone() {
+                on_change(&self.value, cx);
+            }
+            self.refresh_suggestions(cx);
+            cx.notify();
+            return true;
+        }
+        false
+    }
+
+    fn replace_selection(&mut self, text: &str, cx: &mut gpui::Context<Self>) {
+        let range = self.selection_range();
+        let insert_pos = range.as_ref().map(|r| r.start).unwrap_or(self.cursor_pos);
+        let delete_range = range.unwrap_or(self.cursor_pos..self.cursor_pos);
+
+        self.value.replace_range(delete_range.clone(), text);
+        self.cursor_pos = insert_pos + text.len();
+        self.clear_selection();
+
+        if let Some(on_change) = self.on_change.clone() {
+            on_change(&self.value, cx);
+        }
+        self.refresh_suggestions(cx);
+        cx.notify();
+    }
+
+    fn selected_text(&self) -> Option<&str> {
+        self.selection_range().map(|range| &self.value[range])
     }
 
     fn word_start_before(&self, pos: usize) -> usize {
@@ -167,24 +235,44 @@ impl Input {
         i
     }
 
-    fn move_left(&mut self) {
+    fn move_left(&mut self, cx: &mut gpui::Context<Self>, clear_selection: bool) {
         if self.cursor_pos > 0 {
             let mut new_pos = self.cursor_pos - 1;
             while new_pos > 0 && !self.value.is_char_boundary(new_pos) {
                 new_pos -= 1;
             }
             self.cursor_pos = new_pos;
+            if clear_selection {
+                self.clear_selection();
+            }
+            cx.notify();
         }
     }
 
-    fn move_right(&mut self) {
+    fn move_right(&mut self, cx: &mut gpui::Context<Self>, clear_selection: bool) {
         if self.cursor_pos < self.value.len() {
             let mut new_pos = self.cursor_pos + 1;
             while new_pos < self.value.len() && !self.value.is_char_boundary(new_pos) {
                 new_pos += 1;
             }
             self.cursor_pos = new_pos;
+            if clear_selection {
+                self.clear_selection();
+            }
+            cx.notify();
         }
+    }
+
+    fn move_word_left(&mut self, cx: &mut gpui::Context<Self>) {
+        self.cursor_pos = self.word_start_before(self.cursor_pos);
+        self.clear_selection();
+        cx.notify();
+    }
+
+    fn move_word_right(&mut self, cx: &mut gpui::Context<Self>) {
+        self.cursor_pos = self.word_end_after(self.cursor_pos);
+        self.clear_selection();
+        cx.notify();
     }
 
     fn refresh_suggestions(&mut self, cx: &mut gpui::Context<Self>) {
@@ -271,23 +359,20 @@ impl Input {
     }
 
     fn insert_text(&mut self, text: &str, cx: &mut gpui::Context<Self>) {
-        self.value.insert_str(self.cursor_pos, text);
-        self.cursor_pos += text.len();
-
-        if let Some(on_change) = self.on_change.clone() {
-            on_change(&self.value, cx);
-        }
-        self.refresh_suggestions(cx);
-        cx.notify();
+        self.replace_selection(text, cx);
     }
 
     fn delete_backward(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.has_selection() {
+            self.delete_selection(cx);
+            return;
+        }
         if self.cursor_pos == 0 {
             return;
         }
 
         let old_pos = self.cursor_pos;
-        self.move_left();
+        self.move_left(cx, false);
         self.value.drain(self.cursor_pos..old_pos);
 
         if let Some(on_change) = self.on_change.clone() {
@@ -298,6 +383,10 @@ impl Input {
     }
 
     fn delete_forward(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.has_selection() {
+            self.delete_selection(cx);
+            return;
+        }
         if self.cursor_pos >= self.value.len() {
             return;
         }
@@ -316,6 +405,10 @@ impl Input {
     }
 
     fn delete_word_backward(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.has_selection() {
+            self.delete_selection(cx);
+            return;
+        }
         if self.cursor_pos == 0 {
             return;
         }
@@ -332,6 +425,10 @@ impl Input {
     }
 
     fn delete_word_forward(&mut self, cx: &mut gpui::Context<Self>) {
+        if self.has_selection() {
+            self.delete_selection(cx);
+            return;
+        }
         if self.cursor_pos >= self.value.len() {
             return;
         }
@@ -379,6 +476,43 @@ impl Input {
 
         if ctrl && (key == "h" || key == "l") {
             return;
+        }
+
+        if ctrl {
+            match key {
+                "a" => {
+                    self.select_all();
+                    cx.notify();
+                    return;
+                }
+                "c" => {
+                    if let Some(text) = self.selected_text() {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.to_string()));
+                    }
+                    return;
+                }
+                "x" => {
+                    if let Some(text) = self.selected_text() {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.to_string()));
+                        self.delete_selection(cx);
+                    }
+                    return;
+                }
+                "v" => {
+                    if let Some(item) = cx.read_from_clipboard() {
+                        if let Some(text) = item.text() {
+                            let sanitized = if !self.multiline {
+                                text.replace('\n', " ").replace("\r\n", " ")
+                            } else {
+                                text.replace("\r\n", "\n")
+                            };
+                            self.replace_selection(&sanitized, cx);
+                        }
+                    }
+                    return;
+                }
+                _ => {}
+            }
         }
 
         match key {
@@ -433,32 +567,59 @@ impl Input {
 
             "left" => {
                 if ctrl {
-                    self.cursor_pos = self.word_start_before(self.cursor_pos);
-                    cx.notify();
+                    self.move_word_left(cx);
+                } else if shift {
+                    if self.selection_anchor.is_none() {
+                        self.selection_anchor = Some(self.cursor_pos);
+                    }
+                    self.move_left(cx, false);
                 } else {
-                    self.move_left();
-                    cx.notify();
+                    self.move_left(cx, true);
                 }
             }
 
             "right" => {
                 if ctrl {
-                    self.cursor_pos = self.word_end_after(self.cursor_pos);
-                    cx.notify();
+                    self.move_word_right(cx);
+                } else if shift {
+                    if self.selection_anchor.is_none() {
+                        self.selection_anchor = Some(self.cursor_pos);
+                    }
+                    self.move_right(cx, false);
                 } else {
-                    self.move_right();
-                    cx.notify();
+                    self.move_right(cx, true);
                 }
             }
 
             "home" => {
-                self.cursor_pos = 0;
-                cx.notify();
+                if shift && self.selection_anchor.is_none() {
+                    self.selection_anchor = Some(self.cursor_pos);
+                    self.cursor_pos = 0;
+                    cx.notify();
+                } else if shift {
+                    self.cursor_pos = 0;
+                    cx.notify();
+                } else {
+                    self.cursor_pos = 0;
+                    self.clear_selection();
+                    cx.notify();
+                }
             }
 
             "end" => {
-                self.cursor_pos = self.value.len();
-                cx.notify();
+                let len = self.value.len();
+                if shift && self.selection_anchor.is_none() {
+                    self.selection_anchor = Some(self.cursor_pos);
+                    self.cursor_pos = len;
+                    cx.notify();
+                } else if shift {
+                    self.cursor_pos = len;
+                    cx.notify();
+                } else {
+                    self.cursor_pos = len;
+                    self.clear_selection();
+                    cx.notify();
+                }
             }
 
             "backspace" => {
@@ -479,11 +640,6 @@ impl Input {
 
             "w" if ctrl => {
                 self.delete_word_backward(cx);
-            }
-
-            "a" if ctrl => {
-                self.cursor_pos = 0;
-                cx.notify();
             }
 
             "e" if ctrl => {
@@ -729,22 +885,89 @@ impl gpui::Render for Input {
                 gpui::div().id(self.id.clone()).into_any_element()
             };
 
+            let content = if self.has_selection() {
+                let range = self.selection_range().unwrap();
+                let cursor_at_end = self.cursor_pos >= range.end;
+
+                let before_sel = &self.value[..range.start];
+                let selected_text = &self.value[range.clone()];
+                let after_sel = &self.value[range.end..];
+
+                let cursor = if is_focused {
+                    gpui::div().w_px().h_4().bg(theme.accent).into_any_element()
+                } else {
+                    gpui::div().into_any_element()
+                };
+
+                if cursor_at_end {
+                    gpui::div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .child(
+                            gpui::div()
+                                .text_color(theme.foreground)
+                                .child(before_sel.to_string()),
+                        )
+                        .child(
+                            gpui::div()
+                                .bg(theme.selection)
+                                .text_color(theme.selection_foreground)
+                                .child(selected_text.to_string()),
+                        )
+                        .child(cursor)
+                        .child(
+                            gpui::div()
+                                .text_color(theme.foreground)
+                                .child(after_sel.to_string()),
+                        )
+                        .into_any_element()
+                } else {
+                    gpui::div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .child(
+                            gpui::div()
+                                .text_color(theme.foreground)
+                                .child(before_sel.to_string()),
+                        )
+                        .child(cursor)
+                        .child(
+                            gpui::div()
+                                .bg(theme.selection)
+                                .text_color(theme.selection_foreground)
+                                .child(selected_text.to_string()),
+                        )
+                        .child(
+                            gpui::div()
+                                .text_color(theme.foreground)
+                                .child(after_sel.to_string()),
+                        )
+                        .into_any_element()
+                }
+            } else {
+                gpui::div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(
+                        gpui::div()
+                            .text_color(theme.foreground)
+                            .child(before.to_string()),
+                    )
+                    .child(cursor)
+                    .child(
+                        gpui::div()
+                            .text_color(theme.foreground)
+                            .child(after.to_string()),
+                    )
+                    .into_any_element()
+            };
+
             gpui::div()
                 .id(self.id.clone())
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(
-                    gpui::div()
-                        .text_color(theme.foreground)
-                        .child(before.to_string()),
-                )
-                .child(cursor)
-                .child(
-                    gpui::div()
-                        .text_color(theme.foreground)
-                        .child(after.to_string()),
-                )
+                .child(content)
                 .into_any_element()
         };
 

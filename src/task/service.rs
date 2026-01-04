@@ -610,10 +610,12 @@ impl TaskService {
             .map_err(|e| TaskError::Storage(e.to_string()))?
             .ok_or(TaskError::NotFound(uuid))?;
 
-        let annotation = taskchampion::Annotation {
-            entry: Utc::now(),
-            description,
-        };
+        let mut entry = Utc::now();
+        while tc_task.get_annotations().any(|a| a.entry == entry) {
+            entry = entry + chrono::Duration::nanoseconds(1);
+        }
+
+        let annotation = taskchampion::Annotation { entry, description };
 
         tc_task
             .add_annotation(annotation, &mut ops)

@@ -401,14 +401,18 @@ impl App {
             annotations_add,
             annotations_delete,
         } = update;
+
+        let has_description = description.is_some();
+        let has_project = project.is_some();
+        let has_priority = priority.is_some();
+        let has_due = due.is_some();
+        let has_tags = tags.is_some();
+        let has_status = status.is_some();
+        let has_annotations = !annotations_add.is_empty() || !annotations_delete.is_empty();
+
         let mut latest_task: Option<task::Task> = None;
 
-        if description.is_some()
-            || project.is_some()
-            || priority.is_some()
-            || tags.is_some()
-            || due.is_some()
-        {
+        if has_description || has_project || has_priority || has_tags || has_due {
             match self.task_service.update_task(
                 task_id,
                 description,
@@ -433,39 +437,22 @@ impl App {
             }
         }
 
-        if let Some(status) = status {
-            let status_result = match status {
-                task::TaskStatus::Completed => self.task_service.complete_task(task_id),
-                task::TaskStatus::Pending => self.task_service.reopen_task(task_id),
-                task::TaskStatus::Deleted => {
-                    self.task_service.delete_task(task_id).and_then(|_| {
-                        self.task_service
-                            .get_task(task_id)
-                            .and_then(|task| task.ok_or(task::TaskError::NotFound(task_id)))
-                    })
+        if has_status {
+            match status {
+                Some(task::TaskStatus::Completed) => {
+                    latest_task = self.task_service.complete_task(task_id).ok()
                 }
-                _ => self
-                    .task_service
-                    .get_task(task_id)
-                    .and_then(|task| task.ok_or(task::TaskError::NotFound(task_id))),
-            };
-
-            match status_result {
-                Ok(task) => latest_task = Some(task),
-                Err(e) => {
-                    log::error!("[App] Failed to update status: {}", e);
-                    self.toast_host.update(cx, |host, cx| {
-                        host.push(
-                            ToastKind::Error,
-                            format!("Failed to update status: {}", e),
-                            cx,
-                        );
-                    });
-                    if let Some(task) = latest_task {
-                        self.apply_task_update(task, cx);
-                    }
-                    return;
+                Some(task::TaskStatus::Pending) => {
+                    latest_task = self.task_service.reopen_task(task_id).ok()
                 }
+                Some(task::TaskStatus::Deleted) => {
+                    let _ = self.task_service.delete_task(task_id);
+                    latest_task = self.task_service.get_task(task_id).ok().flatten();
+                }
+                _ => {
+                    latest_task = self.task_service.get_task(task_id).ok().flatten();
+                }
+                None => {}
             }
         }
 
@@ -481,10 +468,6 @@ impl App {
                             cx,
                         );
                     });
-                    if let Some(task) = latest_task {
-                        self.sync_task_detail(task, cx);
-                    }
-                    return;
                 }
             }
         }
@@ -501,15 +484,29 @@ impl App {
                             cx,
                         );
                     });
-                    if let Some(task) = latest_task {
-                        self.sync_task_detail(task, cx);
-                    }
-                    return;
                 }
             }
         }
 
-        if let Some(task) = latest_task {
+        let task_to_sync = if latest_task.is_some() {
+            latest_task.take()
+        } else if has_description
+            || has_project
+            || has_priority
+            || has_tags
+            || has_due
+            || has_status
+            || has_annotations
+        {
+            self.task_service.get_task(task_id).ok().flatten()
+        } else {
+            self.task_detail_modal.update(cx, |modal, cx| {
+                modal.cancel_edit(None, cx);
+            });
+            return;
+        };
+
+        if let Some(task) = task_to_sync {
             self.apply_task_update(task, cx);
         } else {
             self.task_detail_modal.update(cx, |modal, cx| {
