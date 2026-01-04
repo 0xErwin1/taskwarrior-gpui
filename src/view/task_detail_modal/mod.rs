@@ -1708,24 +1708,50 @@ impl TaskDetailModal {
                     if i < visible.len() {
                         let (actual_index, ann) = visible[i];
 
-                        if ann.origin == AnnotationOrigin::Added {
-                            self.state.inline_edit =
-                                Some(InlineEditTarget::Annotation(actual_index));
+                        match ann.origin {
+                            AnnotationOrigin::Added => {
+                                self.state.inline_edit =
+                                    Some(InlineEditTarget::Annotation(actual_index));
 
-                            let ann_value = ann.text.to_string();
-                            self.entities.annotation_input.update(cx, |input, cx| {
-                                input.set_value(ann_value, cx);
-                            });
+                                let ann_value = ann.text.to_string();
+                                self.entities.annotation_input.update(cx, |input, cx| {
+                                    input.set_value(ann_value, cx);
+                                });
 
-                            self.enter_edit_field(window, cx);
+                                self.enter_edit_field(window, cx);
 
-                            return CommandResult::Handled;
-                        } else {
-                            let toast_host = cx.global::<ToastGlobal>().host.clone();
-                            cx.update_entity(&toast_host, |host, cx| {
-                                host.push(ToastKind::Error, "Cannot edit original annotations", cx);
-                            });
-                            return CommandResult::Handled;
+                                return CommandResult::Handled;
+                            }
+                            AnnotationOrigin::Original => {
+                                let ann_id = ann.id;
+                                let ann_value = ann.text.to_string();
+                                self.state.annotations.mark_modified(ann_id);
+
+                                self.state.inline_edit =
+                                    Some(InlineEditTarget::Annotation(actual_index));
+
+                                self.entities.annotation_input.update(cx, |input, cx| {
+                                    input.set_value(ann_value, cx);
+                                });
+
+                                self.enter_edit_field(window, cx);
+
+                                return CommandResult::Handled;
+                            }
+                            AnnotationOrigin::Modified { .. } => {
+                                self.state.inline_edit =
+                                    Some(InlineEditTarget::Annotation(actual_index));
+
+                                let ann_value = ann.text.to_string();
+                                self.entities.annotation_input.update(cx, |input, cx| {
+                                    input.set_value(ann_value, cx);
+                                });
+
+                                self.enter_edit_field(window, cx);
+
+                                return CommandResult::Handled;
+                            }
+                            AnnotationOrigin::Deleted => {}
                         }
                     }
                 }

@@ -226,6 +226,13 @@ pub(super) fn build_task_update(
                 update.annotations_delete.push(annotation.created_at);
             }
             AnnotationOrigin::Original => {}
+            AnnotationOrigin::Modified {
+                original_entry,
+                original_text: _,
+            } => {
+                update.annotations_delete.push(original_entry);
+                update.annotations_add.push(annotation.text.to_string());
+            }
         }
     }
 

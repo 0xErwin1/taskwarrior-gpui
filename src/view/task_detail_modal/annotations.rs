@@ -30,11 +30,15 @@ pub(super) struct AnnotationView {
     pub(super) origin: AnnotationOrigin,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum AnnotationOrigin {
     Original,
     Added,
     Deleted,
+    Modified {
+        original_entry: DateTime<Utc>,
+        original_text: String,
+    },
 }
 
 fn annotation_id(entry: DateTime<Utc>, text: &str, index: usize) -> AnnotationId {
@@ -95,5 +99,22 @@ impl AnnotationState {
         }
         item.origin = AnnotationOrigin::Deleted;
         Some(item.created_at)
+    }
+
+    pub(super) fn mark_modified(&mut self, id: AnnotationId) -> bool {
+        if let Some(index) = self.items.iter().position(|item| item.id == id) {
+            let item = &mut self.items[index];
+            match item.origin {
+                AnnotationOrigin::Original => {
+                    item.origin = AnnotationOrigin::Modified {
+                        original_entry: item.created_at,
+                        original_text: item.text.to_string(),
+                    };
+                    return true;
+                }
+                _ => return false,
+            }
+        }
+        false
     }
 }
