@@ -1841,11 +1841,13 @@ impl TaskDetailModal {
 
     pub fn scroll(&self, delta: i32, cx: &mut gpui::Context<Self>) {
         let handle = &self.scroll_handle;
+
         let current = if delta > 0 {
             handle.bottom_item()
         } else {
             handle.top_item()
         };
+
         let next = if delta > 0 {
             current.saturating_add(1)
         } else {
@@ -1890,7 +1892,7 @@ impl TaskDetailModal {
                         (Some(next_index), true)
                     }
                 } else if i == 0 {
-                    (None, false)
+                    (None, true)
                 } else {
                     (Some(i - 1), true)
                 }
