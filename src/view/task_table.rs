@@ -227,7 +227,10 @@ impl From<&task::TaskSummary> for TaskRow {
 
         Self {
             uuid: value.uuid,
-            id_display: value.working_id.unwrap_or(0).to_string(),
+            id_display: value
+                .working_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string()),
             description: Self::truncate(&value.description, TABLE_MAX_DESCRIPTION_LENGTH),
             project: value.project.clone().unwrap_or(String::new()),
             due: Self::format_date(&value.due, value.is_due_today()),
@@ -430,9 +433,18 @@ impl TaskTable {
 
     fn get_current_page_rows(&self) -> &[TaskRow] {
         let start = self.pagination.first_item_index();
-        let end = self.pagination.last_item_index();
+        let end = self
+            .pagination
+            .last_item_index()
+            .min(self.cached_rows.len());
+        let safe_start = start.min(end).min(self.cached_rows.len());
+        let safe_end = end.min(self.cached_rows.len());
 
-        &self.cached_rows[start..end]
+        if safe_start >= safe_end || self.cached_rows.is_empty() {
+            &[]
+        } else {
+            &self.cached_rows[safe_start..safe_end]
+        }
     }
 
     pub fn reload_tasks_from_all(
@@ -760,7 +772,7 @@ impl TaskTable {
             return false;
         };
 
-        let page = idx / self.pagination.page_size + 1;
+        let page = idx / self.pagination.page_size.max(1) + 1;
         self.pagination.current_page(page);
         let page_first_idx = self.pagination.first_item_index();
         self.selected_global_idx = Some(idx);

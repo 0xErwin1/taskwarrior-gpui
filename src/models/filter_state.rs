@@ -172,7 +172,7 @@ impl DueFilter {
             "this_week" => Some(Self::ThisWeek),
             "none" => Some(Self::NoDate),
             _ => value.strip_prefix("date:").and_then(|date| {
-                NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                NaiveDate::parse_from_str(date, DATE_FORMAT)
                     .ok()
                     .map(Self::OnDate)
             }),

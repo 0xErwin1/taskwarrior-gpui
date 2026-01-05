@@ -44,7 +44,7 @@ impl App {
         if self.delete_confirm.is_some() {
             let key = event.keystroke.key.as_str().to_lowercase();
             let mods = &event.keystroke.modifiers;
-            let has_mods = mods.control || mods.alt || mods.shift || mods.platform;
+            let has_mods = mods.control || mods.alt || mods.shift;
 
             if !has_mods {
                 match key.as_str() {
@@ -300,8 +300,17 @@ impl App {
 
         let updated_task = match self.task_service.get_task(confirm.task_id) {
             Ok(task) => task,
+            Err(ref e)
+                if e.to_string().contains("not found") || e.to_string().contains("No such") =>
+            {
+                log::info!(
+                    "[App] Task {} not found after deletion (expected)",
+                    confirm.task_id
+                );
+                None
+            }
             Err(e) => {
-                log::error!("[App] Failed to reload deleted task: {}", e);
+                log::warn!("[App] Failed to reload task after delete: {}", e);
                 None
             }
         };
@@ -329,10 +338,11 @@ impl App {
             self.task_detail_modal.update(cx, |modal, cx| {
                 modal.close(None, cx);
             });
-            self.toast_host.update(cx, |host, cx| {
-                host.push(ToastKind::Info, "Task deleted", cx);
-            });
         }
+
+        self.toast_host.update(cx, |host, cx| {
+            host.push(ToastKind::Info, "Task deleted", cx);
+        });
 
         self.status_bar.update(cx, |bar, cx| {
             bar.set_dirty(cx);
@@ -498,7 +508,13 @@ impl App {
             || has_status
             || has_annotations
         {
-            self.task_service.get_task(task_id).ok().flatten()
+            match self.task_service.get_task(task_id) {
+                Ok(task) => task,
+                Err(e) => {
+                    log::warn!("[App] Failed to sync task after update: {}", e);
+                    None
+                }
+            }
         } else {
             self.task_detail_modal.update(cx, |modal, cx| {
                 modal.cancel_edit(None, cx);

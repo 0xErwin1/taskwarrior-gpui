@@ -254,6 +254,7 @@ impl TaskDetailModal {
         let status_items = vec![
             DropdownItem::new("Pending"),
             DropdownItem::new("Completed"),
+            DropdownItem::new("Recurring"),
             DropdownItem::new("Deleted"),
         ];
         let status_dropdown = {
@@ -268,7 +269,8 @@ impl TaskDetailModal {
                                 modal.state.form.status = match index {
                                     0 => task::TaskStatus::Pending,
                                     1 => task::TaskStatus::Completed,
-                                    2 => task::TaskStatus::Deleted,
+                                    2 => task::TaskStatus::Recurring,
+                                    3 => task::TaskStatus::Deleted,
                                     _ => task::TaskStatus::Pending,
                                 };
                                 cx.notify();

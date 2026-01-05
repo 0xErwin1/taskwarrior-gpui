@@ -154,16 +154,14 @@ impl App {
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
 
         for task in tasks {
-            if !matches!(task.status, task::TaskStatus::Pending) {
-                continue;
-            }
+            if matches!(task.status, task::TaskStatus::Pending) {
+                if let Some(project) = &task.project {
+                    *project_counts.entry(project.clone()).or_insert(0) += 1;
+                }
 
-            if let Some(project) = &task.project {
-                *project_counts.entry(project.clone()).or_insert(0) += 1;
-            }
-
-            for tag in &task.tags {
-                *tag_counts.entry(tag.clone()).or_insert(0) += 1;
+                for tag in &task.tags {
+                    *tag_counts.entry(tag.clone()).or_insert(0) += 1;
+                }
             }
         }
 
@@ -186,15 +184,7 @@ impl App {
         all_tasks: Vec<task::TaskSummary>,
         cx: &mut gpui::Context<Self>,
     ) {
-        let previous_selection = self.task_table.read(cx).selected_task_uuid();
-        let filter_state = self.filter_state.read(cx).clone();
-        let filtered = task::TaskFilter::from(&filter_state).apply(&all_tasks);
-        let reselect_uuid = previous_selection.and_then(|uuid| {
-            filtered
-                .iter()
-                .any(|task| task.uuid == uuid)
-                .then_some(uuid)
-        });
+        let _filter_state = self.filter_state.read(cx).clone();
 
         self.tasks = all_tasks;
         let (projects, tags) = Self::build_sidebar_data(&self.tasks);
@@ -210,9 +200,6 @@ impl App {
         let tasks = self.tasks.clone();
         self.task_table.update(cx, |table, cx| {
             table.reload_tasks_from_all(tasks, cx);
-            if let Some(uuid) = reselect_uuid {
-                let _ = table.select_task_by_uuid(uuid, cx);
-            }
         });
 
         self.update_modal_project_suggestions(cx);

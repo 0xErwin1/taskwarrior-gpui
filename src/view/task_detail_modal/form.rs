@@ -90,7 +90,7 @@ impl TaskForm {
                 if self.due.trim().is_empty() {
                     None
                 } else if NaiveDate::parse_from_str(self.due.trim(), DATE_FORMAT).is_err() {
-                    Some("Use YYYY-MM-DD".into())
+                    Some("Invalid date format. Use YYYY-MM-DD".into())
                 } else {
                     None
                 }
